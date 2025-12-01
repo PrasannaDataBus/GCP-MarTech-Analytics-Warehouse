@@ -359,10 +359,15 @@ def load_to_bigquery(df: pd.DataFrame, start_date: str, end_date: str, account_i
         AND account_id = '{clean_acc_id}'
     """
     try:
-        bq_client.query(delete_query).result()
-        print(f"  -> Cleared overlap for {clean_acc_id}")
-    except Exception:
-        pass
+        job = bq_client.query(delete_query)  # Start the job
+        job.result()  # Wait for it to finish
+
+        # Get the number of deleted rows
+        num_deleted = job.num_dml_affected_rows or 0
+        print(f"  -> Cleared {num_deleted} overlap rows for {clean_acc_id}")
+
+    except Exception as e:
+        print(f"  -> Warning: Overlap cleanup failed or table didn't exist yet. ({e})")
 
     job_config = bigquery.LoadJobConfig(
         write_disposition = "WRITE_APPEND",
