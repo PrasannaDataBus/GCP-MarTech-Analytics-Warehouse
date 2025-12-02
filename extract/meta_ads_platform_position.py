@@ -4,7 +4,7 @@
 # Partitioning: Assigned in this script (By date)
 # Clustering: Assigned in this script (By important / relevant columns)
 # Incremental Loading: Time Travel window (14 Days)
-# Reliability Logic: Implemented 30-day Date Chunking to prevent API Timeouts during backfills (country, region will have huge volume of records)
+# Reliability Logic: Implemented 30-day Date Chunking to prevent API Timeouts during backfills ('publisher_platform', 'platform_position' will have huge volume of records)
 # MarTech Dictionary: Refer SharePoint file - MarTech Data Dictionary
 
 import os
@@ -87,13 +87,13 @@ if os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
 
 PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 RAW_DATASET_NAME = os.getenv("RAW_DATASET_NAME")
-META_REGION_TABLE_NAME = os.getenv("META_REGION_TABLE_NAME")
+META_PLATFORM_POS_TABLE_NAME = os.getenv("META_PLATFORM_POS_TABLE_NAME")
 
 # --- AUTHENTICATION ---
 bq_client = bigquery.Client()
 
 # --- FIELDS TO EXTRACT ---
-# Note: 'country' and 'region' are NOT in fields, they come from 'breakdowns' param
+# Note: 'publisher_platform', 'platform_position' are NOT in fields, they come from 'breakdowns' param
 FIELDS = [
     'date_start',
     'date_stop',
@@ -154,8 +154,8 @@ def get_ad_accounts():
 
 
 # --- EXTRACTION FUNCTION (Updated with Chunking) ---
-def extract_region_data(account_id: str, account_name: str, start_date: str, end_date: str, currency: str):
-    """Extracts Country, Region data for a specific Meta Ad Account using date chunking."""
+def extract_platform_position_data(account_id: str, account_name: str, start_date: str, end_date: str, currency: str):
+    """Extracts Platform & Position data for a specific Meta Ad Account using date chunking."""
 
     # Ensure 'act_' prefix
     formatted_id = account_id if account_id.startswith('act_') else f"act_{account_id}"
@@ -173,7 +173,7 @@ def extract_region_data(account_id: str, account_name: str, start_date: str, end
             'time_range': time_range,
             'time_increment': 1,
             'level': 'ad',
-            'breakdowns': ['region', 'country'], # <--- THE KEY DIFFERENCE
+            'breakdowns': ['publisher_platform', 'platform_position'], # <--- THE KEY DIFFERENCE
             'limit': 1000,
             'is_async': True  # <--- CRITICAL FIX: Forces the "Job Ticket" mode
         }
@@ -217,8 +217,9 @@ def extract_region_data(account_id: str, account_name: str, start_date: str, end
                     "adset_name": item['adset_name'],
                     "ad_id": item['ad_id'],
                     "ad_name": item['ad_name'],
-                    "country": item.get('country', 'Unknown'),
-                    "region": item.get('region', 'Unknown'),
+                    # --- Breakdown Fields ---
+                    "publisher_platform": item.get('publisher_platform', 'Unknown'), # e.g. facebook, instagram
+                    "platform_position": item.get('platform_position', 'Unknown'),   # e.g. feed, story
                     "impressions": int(item.get('impressions', 0)),
                     "clicks": int(item.get('clicks', 0)),
                     "spend": float(item.get('spend', 0.0)),
@@ -238,7 +239,7 @@ def extract_region_data(account_id: str, account_name: str, start_date: str, end
             continue
 
     # --- INDENTATION FIX ---
-    # This block is now outside the 'for' loop
+    # Return OUTSIDE the loop
     df = pd.DataFrame(all_data_rows)
     if not df.empty:
         df['date'] = pd.to_datetime(df['date']).dt.date
@@ -279,8 +280,8 @@ def extract_region_data(account_id: str, account_name: str, start_date: str, end
     #                     "ad_name": item['ad_name'],
     #
     #                     # --- Breakdown Fields ---
-    #                     "country": item.get('country', 'Unknown'),
-    #                     "region": item.get('region', 'Unknown'),
+    #                     "publisher_platform": item.get('publisher_platform', 'Unknown'), # e.g. facebook, instagram
+    #                     "platform_position": item.get('platform_position', 'Unknown'),   # e.g. feed, story
     #
     #                     "impressions": int(item.get('impressions', 0)),
     #                     "clicks": int(item.get('clicks', 0)),
@@ -334,7 +335,7 @@ def extract_region_data(account_id: str, account_name: str, start_date: str, end
 
 # --- HELPER: Get Last Loaded Date ---
 def get_last_loaded_date(bq_client):
-    table_id = f"{PROJECT_ID}.{RAW_DATASET_NAME}.{META_REGION_TABLE_NAME}"
+    table_id = f"{PROJECT_ID}.{RAW_DATASET_NAME}.{META_PLATFORM_POS_TABLE_NAME}"
     try:
         query = f"SELECT MAX(date) AS max_date FROM `{table_id}`"
         results = bq_client.query(query).result()
@@ -347,7 +348,7 @@ def get_last_loaded_date(bq_client):
 
 # --- LOAD FUNCTION (Idempotent) ---
 def load_to_bigquery(df: pd.DataFrame, start_date: str, end_date: str, account_id: str, bq_client):
-    table_id = f"{PROJECT_ID}.{RAW_DATASET_NAME}.{META_REGION_TABLE_NAME}"
+    table_id = f"{PROJECT_ID}.{RAW_DATASET_NAME}.{META_PLATFORM_POS_TABLE_NAME}"
 
     clean_acc_id = df['account_id'].iloc[0]
 
@@ -380,9 +381,9 @@ def load_to_bigquery(df: pd.DataFrame, start_date: str, end_date: str, account_i
             bigquery.SchemaField("ad_id", "STRING"),
             bigquery.SchemaField("ad_name", "STRING"),
 
-            # Geo Fields
-            bigquery.SchemaField("country", "STRING"),
-            bigquery.SchemaField("region", "STRING"),
+            # Platform/Position Fields
+            bigquery.SchemaField("publisher_platform", "STRING"),
+            bigquery.SchemaField("platform_position", "STRING"),
 
             bigquery.SchemaField("impressions", "INTEGER"),
             bigquery.SchemaField("clicks", "INTEGER"),
@@ -401,7 +402,7 @@ def load_to_bigquery(df: pd.DataFrame, start_date: str, end_date: str, account_i
             type_ = bigquery.TimePartitioningType.DAY,
             field = "date",
         ),
-        clustering_fields = ["account_id", "campaign_id", "country", "region"]
+        clustering_fields = ["account_id", "campaign_id", "publisher_platform"]
     )
 
     job = bq_client.load_table_from_dataframe(df, table_id, job_config = job_config)
@@ -433,7 +434,7 @@ def main():
         print(f"Failed to initialize Meta API: {e}")
         return
 
-    print("--- Starting Meta Ads Country, Region Extraction ---")
+    print("--- Starting Meta Ads 'publisher_platform', 'platform_position' Extraction ---")
 
     # 5. Get Accounts (Now this will work because API is init)
     try:
@@ -468,7 +469,7 @@ def main():
         currency = acc['currency']
 
         try:
-            df = extract_region_data(acc_id, acc_name, start_date, end_date, currency)
+            df = extract_platform_position_data(acc_id, acc_name, start_date, end_date, currency)
             if not df.empty:
                 print(f"Extracted {len(df)} rows for {acc_name}.")
                 load_to_bigquery(df, start_date, end_date, acc_id, bq_client)
@@ -511,7 +512,7 @@ def main():
     #         print(f"  -> Extracting Year {yr}: {start_date} to {end_date}")
     #
     #         try:
-    #             df = extract_region_data(acc_id, acc_name, start_date, end_date, currency)
+    #             df = extract_platform_position_data(acc_id, acc_name, start_date, end_date, currency)
     #
     #             if not df.empty:
     #                 # Important: We pass the specific dates to ensure DELETE works correctly for this slice
