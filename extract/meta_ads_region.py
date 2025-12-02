@@ -1,12 +1,10 @@
 # Process: Extract Raw Data and Injest into a raw schema inside a raw table
-# Data Points: Several Meta Ads Account via Graph API
+# Data Points: Several Meta Ads Account via Graph API / ASYNCHRONOUS API
 # Orchestration: Airflow-Docker-Dev & Airflow-Docker-Prod
 # Partitioning: Assigned in this script (By date)
 # Clustering: Assigned in this script (By important / relevant columns)
 # Incremental Loading: Time Travel window (14 Days)
-# Reliability Logic: Implemented 7-day Date Chunking to prevent API Timeouts during backfills (country, region will have huge volume of records)
-# API Rate Limit Error: Sleep for 2 minutes, then try the same chunk again.
-# Important Action: Whenever you hit the API Rate limit error, Wait 15-30 minutes before running the script again. You need to let your API "Bucket" drain on Meta's side.
+# Reliability Logic: Implemented 30-day Date Chunking to prevent API Timeouts during backfills (country, region will have huge volume of records)
 # MarTech Dictionary: Refer SharePoint file - MarTech Data Dictionary
 
 import os
