@@ -1,0 +1,130 @@
+version: 2
+
+sources:
+  - name: marketing_raw
+    description: "Raw marketing data from Google & Meta APIs (Bronze Layer)."
+    database: gcp-martech-analytics
+    schema: marketing_raw
+    loader: Airflow Python Operators
+
+    tables:
+      # =========================================================
+      # GOOGLE ADS (19 Tables)
+      # =========================================================
+
+      # --- Financials & Performance ---
+      - name: google_ads_performance_raw
+        description: "Main Fact Table: Daily Cost, Impressions, Clicks per Ad."
+        loaded_at_field: date
+
+      - name: google_ads_budget_pacing_raw
+        description: "Daily spend vs Campaign Budget limits."
+        loaded_at_field: date
+
+      - name: google_ads_conversion_action_raw
+        description: "Granular conversion data (Type, Value, Category)."
+        loaded_at_field: date
+
+      # --- Context (Dimensions & Bridges) ---
+      - name: google_ads_ad_dim
+        description: "Ad Copy details (Headlines, Descriptions, Paths)."
+
+      - name: google_ads_audience_dim
+        description: "Audience segment names and metadata."
+
+      - name: google_ads_geo_dim
+        description: "Lookup table for Geo Target IDs (Country, Region Names)."
+
+      - name: google_ads_keyword_dim
+        description: "Keyword text and match type settings."
+
+      - name: google_ads_pmax_asset_dim
+        description: "Performance Max asset metadata (Images, Text)."
+
+      # --- Context (Raw Performance) ---
+      - name: google_ads_keyword_raw
+        description: "Daily performance stats per Keyword."
+        loaded_at_field: date
+
+      - name: google_ads_landing_page_raw
+        description: "Performance by Final URL/Landing Page."
+        loaded_at_field: date
+
+      - name: google_ads_placement_raw
+        description: "Where the ad appeared (YouTube channels, URLs)."
+        loaded_at_field: date
+
+      - name: google_ads_pmax_asset_raw
+        description: "Daily performance for PMax asset groups."
+        loaded_at_field: date
+
+      - name: google_ads_search_terms_raw
+        description: "Actual search queries typed by users."
+        loaded_at_field: date
+
+      # --- Segments (Demographics & Breakdowns) ---
+      - name: google_ads_age_range_raw
+        description: "Performance breakdown by Age Group."
+        loaded_at_field: date
+
+      - name: google_ads_audience_raw
+        description: "Performance by Audience Segment."
+        loaded_at_field: date
+
+      - name: google_ads_gender_raw
+        description: "Performance breakdown by Gender."
+        loaded_at_field: date
+
+      - name: google_ads_geo_raw
+        description: "Performance by Geographic Location."
+        loaded_at_field: date
+
+      - name: google_ads_schedule_raw
+        description: "Performance by Hour of Day & Day of Week."
+        loaded_at_field: date
+
+      - name: google_ads_user_location_raw
+        description: "Performance by User's actual Physical Location."
+        loaded_at_field: date
+
+
+      # =========================================================
+      # META ADS (9 Tables)
+      # =========================================================
+
+      # --- Financials & Performance ---
+      - name: meta_ads_performance_raw
+        description: "Main Fact Table: Daily Spend, Impressions, Clicks per Ad."
+        loaded_at_field: date_start
+
+      - name: meta_ads_budget_pacing_raw
+        description: "Daily Spend vs AdSet Budget."
+        loaded_at_field: date_start
+
+      - name: meta_ads_conversion_action_raw
+        description: "Detailed conversion actions (Leads, Purchases)."
+        loaded_at_field: date_start
+
+      # --- Context (Dimensions) ---
+      - name: meta_ads_ad_dim
+        description: "Bridge: Links Ad ID to Creative ID."
+
+      - name: meta_ads_creative_dim
+        description: "Creative details (Image URL, Body, Title, CTA)."
+
+      # --- Segments (Breakdowns) ---
+      - name: meta_ads_age_gender_raw
+        description: "Demographics: Age and Gender combined."
+        loaded_at_field: date_start
+
+      - name: meta_ads_hourly_raw
+        description: "Hourly performance (0-23)."
+        loaded_at_field: date_start
+
+      - name: meta_ads_platform_position_raw
+        description: "Breakdown by Publisher (FB/IG) and Position (Feed/Story)."
+        loaded_at_field: date_start
+
+      - name: meta_ads_region_raw
+        description: "Geographic performance (Region/State)."
+        loaded_at_field: date_start
