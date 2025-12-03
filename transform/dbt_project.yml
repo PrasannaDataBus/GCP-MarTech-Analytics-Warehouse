@@ -31,5 +31,5 @@ models:
     # Config for the Gold Layer (Marts)
     marts:
       +materialized: table
-      +schema: gold    # Creates dataset: marketing_gold_dev (or prod)
+      +schema: gold    # Creates dataset: marketing_gold (or prod)
       +tags: ["gold", "daily"]
