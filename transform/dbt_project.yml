@@ -1,0 +1,35 @@
+# Configure DBT
+
+name: 'gcp_martech_warehouse'
+version: '1.0.0'
+config-version: 2
+
+# This must match the profile name in your profiles.yml (Step 3)
+profile: 'gcp_martech_warehouse'
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+analysis-paths: ["analyses"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"  # directory which will store compiled SQL files
+clean-targets:         # directories to be removed by 'dbt clean'
+  - "target"
+  - "dbt_packages"
+
+# Configures how tables are created in BigQuery
+models:
+  gcp_martech_warehouse:
+    # Config for the Silver Layer (Staging)
+    staging:
+      +materialized: view
+      +schema: silver  # Creates dataset: marketing_silver (or prod)
+      +tags: ["silver", "daily"]
+
+    # Config for the Gold Layer (Marts)
+    marts:
+      +materialized: table
+      +schema: gold    # Creates dataset: marketing_gold (or prod)
+      +tags: ["gold", "daily"]

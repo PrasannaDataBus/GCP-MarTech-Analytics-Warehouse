@@ -5,3 +5,6 @@ google-cloud-bigquery
 pandas
 pyarrow
 python-dotenv
+
+# Transformation (Add this line)
+dbt-bigquery==1.7.8

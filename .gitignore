@@ -1,5 +1,33 @@
-# Git Ignore
+# ===========================
+# 1. SECURITY (Block These)
+# ===========================
+# Ignore the specific credential file
+google-ads.yaml
+google_ads.yaml
+
+# Ignore all keys and secrets
 *.json
 *.env
-*.yaml
+key/
+
+# ===========================
+# 2. PYTHON & IDE
+# ===========================
+__pycache__/
+*.pyc
 .idea/
+.vscode/
+
+# ===========================
+# 3. DBT ARTIFACTS (Generated garbage)
+# ===========================
+transform/target/
+transform/dbt_packages/
+transform/logs/
+
+# ===========================
+# 4. ALLOW CONFIGS
+# ===========================
+# Note: We do NOT put *.yaml here.
+# This ensures dbt_project.yml, and src_marketing.yml
+# are automatically tracked by git.
