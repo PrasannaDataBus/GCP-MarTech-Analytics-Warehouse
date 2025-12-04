@@ -5,6 +5,12 @@
 
 WITH source AS (
     SELECT * FROM {{ source('marketing_raw', 'meta_ads_performance_raw') }}
+
+    -- COST SAVER: Runs only in Dev. Ignored in Prod.
+    -- When merged to Prod, dbt ignores it automatically.
+    {% if target.name == 'dev' %}
+    WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY)
+    {% endif %}
 ),
 
 renamed AS (
