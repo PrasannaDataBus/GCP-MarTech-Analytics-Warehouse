@@ -28,6 +28,21 @@
 cd "C:/Users/prasa/Root/Airflow-Docker-Dev"
 
 # ==================================================================================================
+# 🔁 Restart or Rebuild Airflow
+# --------------------------------------------------------------------------------------------------
+# Restart Cleanly
+# ✅ Use when restarting after small edits to environment variables or compose file.
+# ==================================================================================================
+# docker compose down
+# docker compose up -d
+
+# Rebuild Images (after Dockerfile or dependency changes)
+# ✅ Use when adding new Python dependencies or modifying Dockerfile.
+# ==================================================================================================
+docker compose build --no-cache
+docker compose up -d
+
+# ==================================================================================================
 # 🚪 Step 1: Enter the Container (The "Magic Portal")
 # --------------------------------------------------------------------------------------------------
 # ✅ What It Does:
