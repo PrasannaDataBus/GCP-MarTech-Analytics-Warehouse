@@ -40,6 +40,8 @@ The Google Ads pipeline comprises **17 distinct extraction modules** producing 1
 
 - **Clustering:** Tables utilize clustered columns (e.g., `Campaign ID`, `Ad Group ID`, `Important Columns`) to reduce query costs and latency.
 
+---
+
 **🥈 2. Silver Layer (Staging & Normalization)**
 
 **Goal:** Clean, standardize, and prepare data for joining. **Tech Stack:** dbt Core (View Materialization).
@@ -58,6 +60,8 @@ The Google Ads pipeline comprises **17 distinct extraction modules** producing 1
 
 **Cost Saving (Slim CI):** In the Development Environment, we use Jinja Macros ({% if target.name == 'dev' %}) to limit processing to the last 14 days. This reduces cloud compute costs by >90% during testing.
 
+---
+
 **🥇 3. Gold Layer (Marts & Business Intelligence)**
 
 **Goal:** Aggregated, business-ready tables for Dashboarding. **Tech Stack:** dbt Core (Table Materialization).
@@ -71,6 +75,8 @@ The Google Ads pipeline comprises **17 distinct extraction modules** producing 1
 - **Consolidation:** Stacks Google and Meta data into a single ads_performance master table.
 
 - **Optimization:** Tables are Partitioned (by Date) and Clustered (by Platform/Event/Important Columns) to ensure high-speed filtering.
+
+---
 
 ### Orchestration Architecture
 
@@ -120,6 +126,8 @@ This specific sheet defines the exact schema for the **Bronze (Raw)** layer in B
 
 - `column_name`: The exact column name as it appears in BigQuery.
 
+---
+
 ## 🏗️ Architecture Summary
 
 | Layer | Description |
@@ -129,6 +137,8 @@ This specific sheet defines the exact schema for the **Bronze (Raw)** layer in B
 | **Load** | Writes structured data into BigQuery datasets following best schema practices. |
 | **Orchestration** | Apache Airflow manages DAGs, task dependencies, retries, and SLAs. |
 | **Secrets Management** | Environment variables securely store credentials. |
+
+---
 
 ## 📅 Project Roadmap & Scope
 
@@ -188,6 +198,8 @@ Admin Access: http://localhost:8081
 
 - Note: **Data Limit = Last 14 Days (Automatic Cost Saver via dbt macros)**, implemented for silver -> gold `dev` processes.
 
+---
+
 ### 🏭 Production Environment (GCP-MarTech-Analytics-Warehouse-Prod)
 
 Used for stable, scheduled data pipelines and automated reporting feeds.
@@ -203,12 +215,16 @@ Admin Access: http://localhost:8080
 
 - **Alerting:** SMTP Email alerts enabled for failures.
 
+---
+
 🔒 Security Policy
 
 - **Secrets Management:** `.env`, `.yaml`, and `.json` files are strictly excluded via .gitignore.
 - **IAM**: GCP Service Accounts utilize Least Privilege access principles.
 - **Authentication:** All API connections are authenticated via secure OAuth2 flows or encrypted JSON key files
 - **Audit:** Access logs are reviewed and API keys are rotated quarterly.
+
+---
 
 🤝 Code of Conduct
 
@@ -219,10 +235,14 @@ We strive to maintain high engineering standards:
 - All DAGs must pass Dev validation before merging to Prod.
 - Documentation must be updated with every major feature release.
 
+---
+
 🧱 Versioning
 
 - Dev	master	v1.x.x	Active development and testing
 - Prod master	v1.x.x	Stable and verified releases
+
+---
 
 🧠 Author & Maintainer
 
