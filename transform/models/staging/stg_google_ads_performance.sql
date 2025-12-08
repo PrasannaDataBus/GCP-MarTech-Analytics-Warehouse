@@ -66,6 +66,8 @@ renamed AS (
         -- 6. Google Specific
         SAFE_CAST(view_through_conversions AS FLOAT64) as view_through_conversions,
         SAFE_CAST(all_conversions AS FLOAT64) as all_conversions,
+        SAFE_CAST(engagements AS INT64) as engagements,
+        bidding_strategy_type, colum-- No cast needed, already string
 
         -- 7. Segments
         device,

@@ -142,6 +142,7 @@ renamed AS (
         -- 4. Financials
         SAFE_CAST(spend AS FLOAT64) as cost,
         SAFE_CAST(average_cpc AS FLOAT64) as average_cpc,
+        SAFE_CAST(cpm AS FLOAT64) as cpm,
 
         -- 5. Performance
         SAFE_CAST(impressions AS INT64) as impressions,
@@ -149,6 +150,8 @@ renamed AS (
         SAFE_CAST(ctr AS FLOAT64) as ctr,
         SAFE_CAST(conversions AS FLOAT64) as conversions,
         SAFE_CAST(conversion_value AS FLOAT64) as conversion_value,
+        SAFE_CAST(reach AS INT64) as reach, -- Meta Specific
+        SAFE_CAST(frequency AS FLOAT64) as frequency, -- Meta Specific
 
         currency
 
