@@ -37,9 +37,21 @@ WITH google_ads AS (
         ctr,
         average_cpc,
 
+        -- GOOGLE SPECIFIC METRICS
+        view_through_conversions,
+        all_conversions,
+        engagements,
+        bidding_strategy_type,
+        ad_network_type,
+
+        -- META SPECIFIC METRICS (Fill with NULLs)
+        CAST(NULL AS FLOAT64) as cpm,
+        CAST(NULL AS INT64) as reach,
+        CAST(NULL AS FLOAT64) as frequency,
+
         -- Extra Context
         currency,
-        device as device_type -- Exists in Google
+        device as device_type
 
     FROM {{ ref('stg_google_ads_performance') }}
 ),
@@ -72,6 +84,18 @@ meta_ads AS (
         conversion_value,
         ctr,
         average_cpc,
+
+        -- GOOGLE SPECIFIC METRICS (Fill with NULLs)
+        CAST(NULL AS FLOAT64) as view_through_conversions,
+        CAST(NULL AS FLOAT64) as all_conversions,
+        CAST(NULL AS INT64) as engagements,
+        CAST(NULL AS STRING) as bidding_strategy_type,
+        CAST(NULL AS STRING) as ad_network_type,
+
+        -- META SPECIFIC METRICS
+        cpm,
+        reach,
+        frequency,
 
         -- Extra Context
         currency,
