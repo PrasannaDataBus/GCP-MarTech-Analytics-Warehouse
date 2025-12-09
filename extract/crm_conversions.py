@@ -101,6 +101,7 @@ DB_NAME = os.getenv("DB_NAME_SG_EMCDB")
 # --- SQL QUERY ---
 CRM_QUERY = """
 SELECT
+    id_commande,
     year,
     date_submit,
     date_time_submit,
@@ -121,7 +122,9 @@ SELECT
     specialty,
     utm_source,
     utm_medium,
-    utm_campaign
+    utm_campaign,
+    orders,
+    new_customer
 FROM events_analytics_hub_emea_latam_apac
 WHERE 
     -- 1. Explicitly Paid Sources
@@ -176,14 +179,25 @@ def extract_crm_data(engine):
     """Executes SQL query against CRM and returns Pandas DataFrame."""
     print(f"Connecting to CRM Database: {DB_HOST}...")
 
+    connection = None
     try:
-        with engine.connect() as connection:
-            df = pd.read_sql(CRM_QUERY, connection)
-            print(f"Extracted {len(df)} rows matching Paid Media criteria.")
-            return df
+        # FIX: Bypass SQLAlchemy Wrapper. Get the raw DBAPI connection.
+        # This resolves the 'Engine object has no attribute cursor' error.
+        connection = engine.raw_connection()
+
+        df = pd.read_sql(CRM_QUERY, connection)
+
+        print(f"Extracted {len(df)} rows matching Paid Media criteria.")
+        return df
+
     except Exception as e:
         print(f"Database Extraction Failed: {e}")
         raise
+
+    finally:
+        # Clean up the raw connection explicitly
+        if connection:
+            connection.close()
 
 
 # ---------------------------------------------------------
@@ -204,11 +218,31 @@ def load_to_bigquery(df: pd.DataFrame, bq_client):
         # Convert Timestamp
         df['date_time_submit'] = pd.to_datetime(df['date_time_submit'], errors = 'coerce')
 
+        # Safe Integer conversion for 'id_commande' (Handle potential NaNs by using nullable Int64)
+        if 'id_commande' in df.columns:
+            df['id_commande'] = df['id_commande'].astype('Int64')
+
         # Add Ingestion Time
         df['_ingested_at'] = datetime.now(timezone.utc)
 
         # Handle NaNs for String columns (BQ doesn't like NaN in String fields sometimes)
-        str_cols = ['utm_source', 'utm_medium', 'utm_campaign', 'city', 'country']
+        str_cols = [
+            'conference_series',
+            'conference_editions',
+            'cut_off_rate',
+            'currency',
+            'order_type',
+            'city',
+            'country',
+            'region',
+            'primary_language',
+            'specialty',
+            'utm_source',
+            'utm_medium',
+            'utm_campaign',
+            'orders',
+            'new_customer'
+        ]
         for col in str_cols:
             if col in df.columns:
                 df[col] = df[col].fillna("Unknown")
@@ -218,6 +252,7 @@ def load_to_bigquery(df: pd.DataFrame, bq_client):
         write_disposition = "WRITE_TRUNCATE",  # REPLACES TABLE CONTENT DAILY
 
         schema = [
+            bigquery.SchemaField("id_commande", "INTEGER"),
             bigquery.SchemaField("year", "INTEGER"),
             bigquery.SchemaField("date_submit", "DATE"),  # Partition Key
             bigquery.SchemaField("date_time_submit", "TIMESTAMP"),
@@ -239,6 +274,8 @@ def load_to_bigquery(df: pd.DataFrame, bq_client):
             bigquery.SchemaField("utm_source", "STRING"),
             bigquery.SchemaField("utm_medium", "STRING"),
             bigquery.SchemaField("utm_campaign", "STRING"),
+            bigquery.SchemaField("orders", "STRING"),
+            bigquery.SchemaField("new_customer", "STRING"),
             bigquery.SchemaField("_ingested_at", "TIMESTAMP"),
         ],
 
