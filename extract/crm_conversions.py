@@ -169,7 +169,7 @@ SELECT
     conference_editions,
     cut_off_rate,
     amount_received as total_ht,            -- Mapping Revenue
-    NULL as currency,                       -- Explicit NULL per requirement
+    'USD' as currency,                       -- Explicit NULL per requirement
     order_type,
     city,
     country,
