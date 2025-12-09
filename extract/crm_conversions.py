@@ -100,6 +100,9 @@ DB_NAME = os.getenv("DB_NAME_SG_EMCDB")
 
 # --- SQL QUERY ---
 CRM_QUERY = """
+/* -------------------------------------------------------
+   REGION 1: EMEA / LATAM / APAC
+------------------------------------------------------- */
 SELECT
     id_commande,
     year,
@@ -139,6 +142,59 @@ WHERE
             'facebook', 'facebook.com', 'fb', 'instagram', 'instagram.com', 'ig', 'instragram', 'meta'
         )
         AND
+        utm_medium IN (
+            'cpc', 'ppc', 'cpm', 'cpv', 'cpa', 'paid', 'display', 'banner',
+            'Paid Search', 'paid search', 'paid_search',
+            'Paid Pmax', 'P Max', 'P+Max', 'pmax',
+            'Social Ads', 'social ads', 'Paid Social', 'paid social', 'early bird ads'
+        )
+        AND utm_source != ''
+    )
+    
+UNION ALL
+
+/* -------------------------------------------------------
+   REGION 2: NORTH AMERICA (Americas)
+------------------------------------------------------- */
+SELECT
+    id_customer as id_commande,             -- Mapping ID
+    year,
+    registration_date_time as date_submit,  -- Mapping Date
+    order_date_time as date_time_submit,    -- Mapping Timestamp
+    time_submit,
+    time_period,
+    time_submit_converted,
+    time_period_converted,
+    conference_series,
+    conference_editions,
+    cut_off_rate,
+    amount_received as total_ht,            -- Mapping Revenue
+    NULL as currency,                       -- Explicit NULL per requirement
+    order_type,
+    city,
+    country,
+    region,
+    primary_language,
+    speciality as specialty,                -- Fix spelling
+    utm_source,
+    utm_medium,
+    utm_campaign,
+    orders,
+    new_customer
+FROM events_analytics_hub_americas
+WHERE 
+    -- 1. Explicitly Paid Sources
+    utm_source IN ('AdWords', 'google_ads', 'meta-SiteLink', 'facebook_ads', 'instagram_ads')
+    OR
+    (
+        -- 2. Ambiguous Sources (Must have Paid Medium)
+        utm_source IN (
+            'google', 'google.com', 'Youtube', 'youtube', 'youtube.com', 'gdn',
+            'facebook', 'facebook.com', 'fb', 'l.facebook.com', 'lm.facebook.com',
+            'instagram', 'instagram.com', 'ig', 'instragram', 'meta'
+        )
+        AND
+        -- Paid Mediums
         utm_medium IN (
             'cpc', 'ppc', 'cpm', 'cpv', 'cpa', 'paid', 'display', 'banner',
             'Paid Search', 'paid search', 'paid_search',
@@ -218,9 +274,9 @@ def load_to_bigquery(df: pd.DataFrame, bq_client):
         # Convert Timestamp
         df['date_time_submit'] = pd.to_datetime(df['date_time_submit'], errors = 'coerce')
 
-        # Safe Integer conversion for 'id_commande' (Handle potential NaNs by using nullable Int64)
+        # Force id_commande to STRING to handle "47064zg2"
         if 'id_commande' in df.columns:
-            df['id_commande'] = df['id_commande'].astype('Int64')
+            df['id_commande'] = df['id_commande'].astype('str')
 
         # Add Ingestion Time
         df['_ingested_at'] = datetime.now(timezone.utc)
@@ -252,7 +308,7 @@ def load_to_bigquery(df: pd.DataFrame, bq_client):
         write_disposition = "WRITE_TRUNCATE",  # REPLACES TABLE CONTENT DAILY
 
         schema = [
-            bigquery.SchemaField("id_commande", "INTEGER"),
+            bigquery.SchemaField("id_commande", "STRING"),
             bigquery.SchemaField("year", "INTEGER"),
             bigquery.SchemaField("date_submit", "DATE"),  # Partition Key
             bigquery.SchemaField("date_time_submit", "TIMESTAMP"),
