@@ -5,6 +5,12 @@
 
 WITH source AS (
     SELECT * FROM {{ source('marketing_raw', 'crm_conversions_raw') }}
+
+    -- COST SAVER: Limit data volume in Dev environment
+    -- This helps testing run fast without processing 5 years of history
+    {% if target.name == 'dev' %}
+    WHERE date_submit >= DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY)
+    {% endif %}
 ),
 
 cleaned AS (
