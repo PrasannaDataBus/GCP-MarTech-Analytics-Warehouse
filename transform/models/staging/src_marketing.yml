@@ -128,3 +128,11 @@ sources:
       - name: meta_ads_region_raw
         description: "Geographic performance (Region/State)."
         loaded_at_field: date_start
+
+      # =========================================================
+      # CRM / Sales conversions
+      # =========================================================
+
+      - name: crm_conversions_raw
+        description: "CRM / Sales Conversions from Analytics Hub (EMEA, LATAM, APAC, North America) to calculate ROI / ROAS"
+        loaded_at_field: date_submit
