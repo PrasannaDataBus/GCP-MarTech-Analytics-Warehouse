@@ -1,5 +1,5 @@
 # Process: Extract CRM Paid Conversions and Ingest into BigQuery
-# Data Source: MySQL Database (events_analytics_hub_emea_latam_apac)
+# Data Source: MySQL Database / Analytics Hub (events_analytics_hub_emea_latam_apac & events_analytics_hub_americas)
 # Destination: BigQuery (marketing_raw.crm_conversions_raw)
 # Orchestration: Airflow-Docker-Dev & Airflow-Docker-Prod
 # Strategy: Full Refresh (WRITE_TRUNCATE) - Daily Snapshot
