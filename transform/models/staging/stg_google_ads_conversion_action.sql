@@ -4,7 +4,7 @@
 ) }}
 
 WITH source AS (
-    SELECT * FROM {{ source('marketing_raw', 'google_ads_performance_raw') }}
+    SELECT * FROM {{ source('marketing_raw', 'google_ads_conversion_action_raw') }}
 
     -- COST SAVER: This block runs ONLY in Dev.
     -- When merged to Prod, dbt ignores it automatically.
@@ -16,9 +16,10 @@ WITH source AS (
 renamed AS (
     SELECT
         -- 1. Generate Unique ID
-        FARM_FINGERPRINT(CONCAT(CAST(date AS STRING), CAST(ad_id AS STRING))) as id,
+        -- Note: Google Conversion Raw is at CAMPAIGN level, not Ad level.
+        FARM_FINGERPRINT(CONCAT(CAST(date AS STRING), CAST(campaign_id AS STRING), CAST(conversion_action_id AS STRING))) as id,
 
-        -- 2. Standardize Date & Time Components
+        -- 2. Standardize Date
         CAST(date AS DATE) as date,
         EXTRACT(YEAR FROM CAST(date AS DATE)) as year,
         EXTRACT(MONTH FROM CAST(date AS DATE)) as month,
@@ -45,37 +46,22 @@ renamed AS (
         campaign_name,
         campaign_status,
 
-        CAST(ad_group_id AS STRING) as ad_group_id,
-        ad_group_name,
+        -- 4. Conversion Specific Dimensions
+        CAST(conversion_action_id AS STRING) as conversion_action_id,
+        conversion_action_name,
+        conversion_category, -- CRITICAL: Use this to filter 'PURCHASE' vs 'LEAD'
 
-        CAST(ad_id AS STRING) as ad_id,
-        ad_name,
-        ad_type,
-
-        -- 4. Financials
-        (SAFE_CAST(cost_micros AS FLOAT64) / 1000000) as cost,
-        SAFE_CAST(average_cpc AS FLOAT64) as average_cpc,
-
-        -- 5. Performance
-        SAFE_CAST(impressions AS INT64) as impressions,
-        SAFE_CAST(clicks AS INT64) as clicks,
-        SAFE_CAST(ctr AS FLOAT64) as ctr,
+        -- 5. Metrics
         SAFE_CAST(conversions AS FLOAT64) as conversions,
         SAFE_CAST(conversions_value AS FLOAT64) as conversion_value,
-
-        -- 6. Google Specific
-        SAFE_CAST(view_through_conversions AS FLOAT64) as view_through_conversions,
         SAFE_CAST(all_conversions AS FLOAT64) as all_conversions,
-        SAFE_CAST(engagements AS INT64) as engagements,
-        bidding_strategy_type, -- No cast needed, already string
+        SAFE_CAST(all_conversions_value AS FLOAT64) as all_conversions_value,
 
-        -- 7. Segments
-        device,
-        ad_network_type,
+        -- 6. Context
+        bidding_strategy_type,
         currency
 
     FROM source
 )
 
 SELECT * FROM renamed
-
