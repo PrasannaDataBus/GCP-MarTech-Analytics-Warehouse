@@ -87,6 +87,9 @@ sources:
         description: "Performance by User's actual Physical Location."
         loaded_at_field: date
 
+      - name: google_ads_campaign_performance_raw
+        description: "Performance by Campaign"
+        loaded_at_field: date
 
       # =========================================================
       # META ADS (9 Tables)
