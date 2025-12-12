@@ -157,6 +157,7 @@ This is an active, ongoing engineering initiative.
 ├── dags/ # Airflow DAG definitions (Dev/Prod)
 ├── extract/ # Source data extraction scripts (Python)
 ├── load/ # BigQuery load operations & schema definitions
+├── repair/ # BigQuery load repair
 ├── transform/ # Transformation and cleaning logic
 │   ├── models/staging/    # Silver Layer (Views)
 │   └── models/marts/      # Gold Layer (Tables)
