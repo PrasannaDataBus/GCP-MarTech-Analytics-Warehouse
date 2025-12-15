@@ -23,6 +23,7 @@ WITH google_ads AS (
         -- Dimensions
         event_name,
         account_id,
+        campaign_id,
         campaign_name,
         campaign_status,
         -- Google doesn't have ad_group/ad level for this report, so we pass NULL or 'N/A'
