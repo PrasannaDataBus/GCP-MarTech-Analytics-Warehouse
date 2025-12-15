@@ -37,6 +37,22 @@ WITH google_ads AS (
         -- GOOGLE MAPPING LOGIC
         -- We clean up the Google names to match the Standard List
         CASE
+            -- 1. EXCLUDE KNOWN JUNK
+            WHEN conversion_action_name LIKE '%NOTWORKING%' THEN 'OTHER'
+            WHEN conversion_action_name LIKE '%Do NOT USE%' THEN 'OTHER'
+
+            -- 2. SPECIFIC TICKET SALES (The "Good" Revenue)
+
+            WHEN conversion_action_name LIKE '%Ticket%' THEN 'PURCHASE'
+            WHEN conversion_action_name LIKE '%Ticket Sale%' THEN 'PURCHASE'
+
+            -- 3. FIX MISCLASSIFIED "REGISTRATIONS" (The $25M Fix)
+            -- Mapping these to LEAD instead of PURCHASE
+
+            WHEN conversion_action_name = 'Registration' THEN 'LEAD'
+            WHEN conversion_action_name = 'Registrations' THEN 'LEAD'
+
+            -- 4. FALLBACK TO CATEGORIES (Standard Logic)
             WHEN conversion_category = 'PURCHASE' THEN 'PURCHASE'
             WHEN conversion_category = 'SUBMIT_LEAD_FORM' THEN 'LEAD'
             WHEN conversion_category = 'SIGNUP' THEN 'SIGNUP'
@@ -84,35 +100,39 @@ meta_ads AS (
         -- Meta doesn't have a separate category column, so we use the name again
         conversion_action as conversion_raw_category,
 
-        -- META MAPPING LOGIC (The Rosetta Stone)
+        -- STRICT META MAPPING LOGIC (Anti-Duplicate)
         -- Order matters! Specific rules (Purchase) go before generic ones (View).
         CASE
-            -- 1. REVENUE DRIVERS (High Priority)
+            -- 1. THE CHOSEN ONE (Reliable Web Pixel Purchase)
+            -- We ignore 'omni_purchase' and 'purchase' to avoid double counting
+            WHEN conversion_action = 'offsite_conversion.fb_pixel_purchase' THEN 'PURCHASE'
+
+            -- 2. REVENUE DRIVERS (High Priority)
             WHEN LOWER(conversion_action) LIKE '%purchase%' THEN 'PURCHASE'
 
-            -- 2. LEADS & SIGNUPS
+            -- 3. LEADS & SIGNUPS
             WHEN LOWER(conversion_action) LIKE '%lead%' THEN 'LEAD'
             WHEN LOWER(conversion_action) LIKE '%complete_registration%' THEN 'SIGNUP'
             WHEN LOWER(conversion_action) LIKE '%subscribe%' THEN 'SIGNUP'
 
-            -- 3. COMMERCE INTENT (Pre-Purchase)
+            -- 4. COMMERCE INTENT (Pre-Purchase)
             WHEN LOWER(conversion_action) LIKE '%add_to_cart%' THEN 'ADD_TO_CART'
             WHEN LOWER(conversion_action) LIKE '%checkout%' THEN 'INITIATE_CHECKOUT'
             WHEN LOWER(conversion_action) LIKE '%add_payment_info%' THEN 'INITIATE_CHECKOUT'
 
-            -- 4. SITE ACTIVITY
+            -- 5. SITE ACTIVITY
             WHEN LOWER(conversion_action) LIKE '%view_content%' THEN 'PAGE_VIEW'
             WHEN LOWER(conversion_action) LIKE '%landing_page_view%' THEN 'PAGE_VIEW'
             WHEN LOWER(conversion_action) LIKE '%page_view%' THEN 'PAGE_VIEW'
             WHEN LOWER(conversion_action) LIKE '%app_site_visit%' THEN 'PAGE_VIEW'
 
-            -- 5. CONTACT / SEARCH
+            -- 6. CONTACT / SEARCH
             WHEN LOWER(conversion_action) LIKE '%search%' THEN 'SEARCH'
             WHEN LOWER(conversion_action) LIKE '%contact%' THEN 'CONTACT'
             WHEN LOWER(conversion_action) LIKE '%call%' THEN 'CONTACT'
             WHEN LOWER(conversion_action) LIKE '%messaging%' THEN 'CONTACT'
 
-            -- 6. ENGAGEMENT (Social Actions)
+            -- 7. ENGAGEMENT (Social Actions)
             WHEN LOWER(conversion_action) LIKE '%engagement%' THEN 'ENGAGEMENT'
             WHEN LOWER(conversion_action) LIKE '%like%' THEN 'ENGAGEMENT'
             WHEN LOWER(conversion_action) LIKE '%comment%' THEN 'ENGAGEMENT'
@@ -120,7 +140,7 @@ meta_ads AS (
             WHEN LOWER(conversion_action) LIKE '%video_view%' THEN 'ENGAGEMENT'
             WHEN LOWER(conversion_action) LIKE '%post%' THEN 'ENGAGEMENT'
 
-            ELSE 'OTHER'
+            ELSE 'OTHER' -- Maps 'omni_purchase' and generic 'purchase' to OTHER
         END as standardized_conversion_type,
 
         -- Metrics
