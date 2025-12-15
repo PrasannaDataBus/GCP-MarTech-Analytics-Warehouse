@@ -72,6 +72,7 @@ meta_ads AS (
         -- Dimensions
         event_name,
         account_id,
+        campaign_id,
         campaign_name,
         -- Meta implies status is active if it's spending, but we can pass NULL
         CAST(NULL AS STRING) as campaign_status,
