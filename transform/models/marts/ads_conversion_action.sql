@@ -116,7 +116,6 @@ meta_ads AS (
 
             -- LEADS & SIGNUPS
 
-            WHEN LOWER(conversion_action) LIKE '%lead%' THEN 'LEAD'
             WHEN conversion_action = 'offsite_conversion.fb_pixel_lead' THEN 'LEAD'
 
             WHEN LOWER(conversion_action) LIKE '%complete_registration%' THEN 'SIGNUP'
