@@ -37,34 +37,29 @@ WITH google_ads AS (
         -- GOOGLE MAPPING LOGIC
         -- We clean up the Google names to match the Standard List
         CASE
-            -- 1. EXCLUDE KNOWN JUNK
-
             -- We catch this specific historical tag BEFORE the general exclusion rule
             WHEN conversion_action_name = 'NOTWORKING-Do NOT USE' THEN 'PURCHASE'
 
+            -- EXCLUDE THE DUPLICATE / JUNK TAGS
+            -- We map this to 'OTHER' so it doesn't inflate your Purchase count
+            WHEN conversion_action_name LIKE 'EUROGIN 2026%' THEN 'OTHER'
             WHEN conversion_action_name LIKE '%NOTWORKING%' THEN 'OTHER'
             WHEN conversion_action_name LIKE '%Do NOT USE%' THEN 'OTHER'
 
-            -- 2. FIX THE "FAKE" LEADS
+            -- FIX THE "FAKE" LEADS
 
             WHEN conversion_action_name = 'Registration' THEN 'INITIATE_CHECKOUT'
 
-            -- 3. SPECIFIC TICKET SALES (The "Good" Revenue)
+            -- SPECIFIC TICKET SALES (The "Good" Revenue)
 
             WHEN conversion_action_name LIKE '%Ticket%' THEN 'PURCHASE'
-            WHEN conversion_action_name LIKE '%Ticket Sale%' THEN 'PURCHASE'
 
-            -- 4. FIX MISCLASSIFIED "REGISTRATION"
-            -- Mapping these to INITIATE_CHECKOUT instead of PURCHASE
-
-            WHEN conversion_action_name = 'Registration' THEN 'INITIATE_CHECKOUT'
-
-            -- 5. ACTUAL LEADS (High Quality)
+            -- ACTUAL LEADS (High Quality)
             WHEN conversion_action_name = 'Registrations' THEN 'LEAD'
             WHEN conversion_action_name LIKE '%Submit lead form%' THEN 'LEAD'
             WHEN conversion_action_name LIKE '%Newsletter%' THEN 'LEAD'
 
-            -- 6. FALLBACK TO CATEGORIES (Standard Logic)
+            -- FALLBACK TO CATEGORIES (Standard Logic)
             WHEN conversion_category = 'PURCHASE' THEN 'PURCHASE'
             WHEN conversion_category = 'SUBMIT_LEAD_FORM' THEN 'LEAD'
             WHEN conversion_category = 'SIGNUP' THEN 'SIGNUP'
@@ -115,16 +110,16 @@ meta_ads AS (
         -- STRICT META MAPPING LOGIC (Anti-Duplicate)
         -- Order matters! Specific rules (Purchase) go before generic ones (View).
         CASE
-            -- 1. THE CHOSEN ONE (Reliable Web Pixel Purchase)
+            -- THE CHOSEN ONE (Reliable Web Pixel Purchase)
             -- We ignore 'omni_purchase' and 'purchase' to avoid double counting
 
             WHEN conversion_action = 'offsite_conversion.fb_pixel_purchase' THEN 'PURCHASE'
 
-            -- 2. REVENUE DRIVERS (High Priority)
+            -- REVENUE DRIVERS (High Priority)
 
             WHEN LOWER(conversion_action) LIKE '%purchase%' THEN 'PURCHASE'
 
-            -- 3. LEADS & SIGNUPS
+            -- LEADS & SIGNUPS
 
             WHEN LOWER(conversion_action) LIKE '%lead%' THEN 'LEAD'
             WHEN conversion_action = 'offsite_conversion.fb_pixel_lead' THEN 'LEAD'
@@ -132,14 +127,14 @@ meta_ads AS (
             WHEN LOWER(conversion_action) LIKE '%complete_registration%' THEN 'SIGNUP'
             WHEN LOWER(conversion_action) LIKE '%subscribe%' THEN 'SIGNUP'
 
-            -- 4. COMMERCE INTENT (Pre-Purchase)
+            -- COMMERCE INTENT (Pre-Purchase)
 
             WHEN LOWER(conversion_action) LIKE '%add_to_cart%' THEN 'ADD_TO_CART'
 
             WHEN LOWER(conversion_action) LIKE '%checkout%' THEN 'INITIATE_CHECKOUT'
             WHEN LOWER(conversion_action) LIKE '%add_payment_info%' THEN 'INITIATE_CHECKOUT'
 
-            -- 5. SITE ACTIVITY
+            -- SITE ACTIVITY
 
             WHEN LOWER(conversion_action) LIKE '%content_view%' THEN 'PAGE_VIEW'
             WHEN LOWER(conversion_action) LIKE '%view_content%' THEN 'PAGE_VIEW'
@@ -147,13 +142,13 @@ meta_ads AS (
             WHEN LOWER(conversion_action) LIKE '%page_view%' THEN 'PAGE_VIEW'
             WHEN LOWER(conversion_action) LIKE '%app_site_visit%' THEN 'PAGE_VIEW'
 
-            -- 6. CONTACT / SEARCH
+            -- CONTACT / SEARCH
             WHEN LOWER(conversion_action) LIKE '%search%' THEN 'SEARCH'
             WHEN LOWER(conversion_action) LIKE '%contact%' THEN 'CONTACT'
             WHEN LOWER(conversion_action) LIKE '%call%' THEN 'CONTACT'
             WHEN LOWER(conversion_action) LIKE '%messaging%' THEN 'CONTACT'
 
-            -- 7. ENGAGEMENT (Social Actions)
+            -- ENGAGEMENT (Social Actions)
             WHEN LOWER(conversion_action) LIKE '%engagement%' THEN 'ENGAGEMENT'
             WHEN LOWER(conversion_action) LIKE '%like%' THEN 'ENGAGEMENT'
             WHEN LOWER(conversion_action) LIKE '%comment%' THEN 'ENGAGEMENT'
