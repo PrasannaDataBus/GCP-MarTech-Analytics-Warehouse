@@ -42,7 +42,6 @@ WITH google_ads AS (
 
             -- EXCLUDE THE DUPLICATE / JUNK TAGS
             -- We map this to 'OTHER' so it doesn't inflate your Purchase count
-            WHEN conversion_action_name LIKE 'EUROGIN 2026%' THEN 'OTHER'
             WHEN conversion_action_name LIKE '%NOTWORKING%' THEN 'OTHER'
             WHEN conversion_action_name LIKE '%Do NOT USE%' THEN 'OTHER'
 
