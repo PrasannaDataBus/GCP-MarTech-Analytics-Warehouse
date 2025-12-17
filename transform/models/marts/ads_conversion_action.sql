@@ -75,6 +75,10 @@ WITH google_ads AS (
 
         -- SAFETY NET: Force 0.0 Value for non-Purchases
         CASE
+            -- Rule 1: Kill the "Registration" value immediately
+            WHEN conversion_action_name = 'Registration' THEN 0.0
+
+            -- Rule 2: Allow valid purchase categories
             WHEN (
                 conversion_action_name LIKE '%Ticket%' OR
                 conversion_category = 'PURCHASE' OR
