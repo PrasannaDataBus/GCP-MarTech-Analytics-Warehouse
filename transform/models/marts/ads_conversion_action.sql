@@ -72,7 +72,16 @@ WITH google_ads AS (
 
         -- Metrics
         conversions,
-        conversion_value,
+
+        -- SAFETY NET: Force 0.0 Value for non-Purchases
+        CASE
+            WHEN (
+                conversion_action_name LIKE '%Ticket%' OR
+                conversion_category = 'PURCHASE' OR
+                conversion_action_name = 'NOTWORKING-Do NOT USE'
+            ) THEN conversion_value
+            ELSE 0.0
+        END as conversion_value,
 
         -- Context
         currency
