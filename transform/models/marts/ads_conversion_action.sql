@@ -114,10 +114,6 @@ meta_ads AS (
 
             WHEN conversion_action = 'offsite_conversion.fb_pixel_purchase' THEN 'PURCHASE'
 
-            -- REVENUE DRIVERS (High Priority)
-
-            WHEN LOWER(conversion_action) LIKE '%purchase%' THEN 'PURCHASE'
-
             -- LEADS & SIGNUPS
 
             WHEN LOWER(conversion_action) LIKE '%lead%' THEN 'LEAD'
@@ -160,7 +156,13 @@ meta_ads AS (
 
         -- Metrics
         conversions,
-        conversion_value,
+
+        -- SAFETY CHECK: Zero out revenue for non-monetary events to prevent the $481k Page View error
+        CASE
+            WHEN conversion_action = 'offsite_conversion.fb_pixel_purchase' THEN conversion_value
+            -- Allow Purchase value. For everything else, force 0.0 to be safe.
+            ELSE 0.0
+        END as conversion_value,
 
         -- Context
         currency
