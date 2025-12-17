@@ -39,6 +39,9 @@ WITH google_ads AS (
         CASE
             -- 1. EXCLUDE KNOWN JUNK
 
+            -- We catch this specific historical tag BEFORE the general exclusion rule
+            WHEN conversion_action_name = 'NOTWORKING-Do NOT USE' THEN 'PURCHASE'
+
             WHEN conversion_action_name LIKE '%NOTWORKING%' THEN 'OTHER'
             WHEN conversion_action_name LIKE '%Do NOT USE%' THEN 'OTHER'
 
