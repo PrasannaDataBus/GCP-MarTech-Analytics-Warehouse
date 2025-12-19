@@ -139,3 +139,10 @@ sources:
       - name: crm_conversions_raw
         description: "CRM / Sales Conversions from Analytics Hub (EMEA, LATAM, APAC, North America) to calculate ROI / ROAS"
         loaded_at_field: date_submit
+
+      # =========================================================
+      # COUNTRY MAPPING
+      # =========================================================
+
+      - name: countries
+        description: "Static reference list mapping 2-char country codes to full names."
