@@ -58,7 +58,7 @@ The Google Ads pipeline comprises **18 distinct extraction modules** producing 1
 - Standardization
 - Smart Parsing
 
-**Cost Saving (Slim CI):** In the Development Environment, we use Jinja Macros ({% if target.name == 'dev' %}) to limit processing to the last 14 days. This reduces cloud compute costs by >90% during testing.
+**Cost Saving (Slim CI):** In the Development Environment, I use Jinja Macros ({% if target.name == 'dev' %}) to limit processing to the last 14 days. This reduces cloud compute costs by >90% during testing.
 
 ---
 
@@ -95,9 +95,9 @@ I deliberately group the Transformation phase (Silver -> Gold) into a single ato
 
 **Deployment Model**
 
-- **Airflow-Dev:** Contains 26 DAGs using **PostgreSQL**. No scheduling enabled. Used strictly for development testing, unit validation, and "Slim CI" runs.
+- **Airflow-Dev:** Contains 32 DAGs using **PostgreSQL**. No scheduling enabled. Used strictly for development testing, unit validation, and "Slim CI" runs.
 
-- **Airflow-Prod:** Contains 26 DAGs using **PostgreSQL**. Daily scheduling is active. Used for deploying and orchestrating core ETL processes on full data history.
+- **Airflow-Prod:** Contains 32 DAGs using **PostgreSQL**. Daily scheduling is active. Used for deploying and orchestrating core ETL processes on full data history.
 
 ---
 
@@ -130,13 +130,13 @@ This specific sheet defines the exact schema for the **Bronze (Raw)** layer in B
 
 ## 🏗️ Architecture Summary
 
-| Layer | Description |
-|--------|--------------|
+| Layer | Description                                                                                                             |
+|--------|-------------------------------------------------------------------------------------------------------------------------|
 | **Extract** | Pulls data from APIs (Google Ads, GA4, Meta Ads, LinkedIn Ads, TikTok Ads etc.) using official SDKs and Python scripts. |
-| **Transform** | Performs cleaning, aggregation, and enrichment of raw datasets. |
-| **Load** | Writes structured data into BigQuery datasets following best schema practices. |
-| **Orchestration** | Apache Airflow manages DAGs, task dependencies, retries, and SLAs. |
-| **Secrets Management** | Environment variables securely store credentials. |
+| **Transform** | Performs cleaning, aggregation, and enrichment of raw datasets using SQL with DBT Core                                  |
+| **Load** | Writes structured data into BigQuery datasets following best schema practices.                                          |
+| **Orchestration** | Apache Airflow manages DAGs, task dependencies, retries, and SLAs.                                                      |
+| **Secrets Management** | Environment variables securely store credentials.                                                                       |
 
 ---
 
@@ -144,10 +144,10 @@ This specific sheet defines the exact schema for the **Bronze (Raw)** layer in B
 
 This is an active, ongoing engineering initiative.
 
-- **✅ Phase 1 (Complete):** Google Ads Extraction & Loading (17 Tables).
+- **✅ Phase 1 (Complete):** Google Ads Extraction & Loading (18 Tables).
 - **🔄 Phase 2 (Complete):** Meta Ads (Facebook/Instagram) API Integration (9 Tables).
-- **🔜 Phase 3 (In Progress):** Transformation Layer using **dbt** (Data Build Tool) to create Gold/Mart datasets.
-- **📊 Phase 4 (Analytics):** BI connection via **Looker** to visualize ROAS, ROI, and facilitate budget pacing/optimization.
+- **🔜 Phase 3 (Complete):** Transformation Layer using **dbt** (Data Build Tool) to create Gold/Mart datasets.
+- **📊 Phase 4 (Analytics):** BI connection via **Power BI** to visualize ad performance metrics such as ROAS, ROI, campaign performance, audience demographics, search term analysis, platform performance, geographic performance, and more, enabling budget pacing and optimization to improve marketing strategy and support Marketing Team and Director of Marketing in data-driven decision-making.
 
 ---
 
@@ -161,6 +161,7 @@ This is an active, ongoing engineering initiative.
 ├── transform/ # Transformation and cleaning logic
 │   ├── models/staging/    # Silver Layer (Views)
 │   └── models/marts/      # Gold Layer (Tables)
+│   └── seeds/     # Reference Layer
 ├── utils/ # Helper modules (logging, config, etc.)
 └── README.md # Project documentation
 ├── best_practices.txt / # GCP & Engineering Guidelines
