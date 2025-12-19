@@ -9,7 +9,14 @@
     cluster_by = ["platform", "event_name", "country_code"]
 ) }}
 
-WITH unioned_data AS (
+WITH country_ref AS (
+    SELECT
+        country_code,
+        country_name
+    FROM {{ source('marketing_raw', 'countries') }}
+),
+
+unioned_data AS (
     SELECT
         id as unique_id,
         'Google Ads' as platform,
@@ -77,4 +84,14 @@ WITH unioned_data AS (
     FROM {{ ref('stg_meta_ads_geo') }}
 )
 
-SELECT * FROM unioned_data
+SELECT
+    u.*,
+
+    -- MAPPING LOGIC:
+    -- 1. Try to find the full name in your reference table.
+    -- 2. If NULL (no match), fallback to the original 2-char code so the field isn't blank.
+    COALESCE(c.country_name, u.country_code) as country_name
+
+FROM unioned_data u
+LEFT JOIN country_ref c
+    ON u.country_code = c.country_code

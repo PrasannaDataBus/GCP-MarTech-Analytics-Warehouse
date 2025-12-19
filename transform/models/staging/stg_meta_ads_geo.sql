@@ -143,7 +143,11 @@ renamed AS (
         region as region_name,
         -- PLACEHOLDERS: Creating these so we can UNION with Google easily
         CONCAT(region, ', ', country) as canonical_name,
-        'Region' as geo_target_type,
+        -- DYNAMIC TARGET TYPE (Corresponding with Google)
+        CASE
+            WHEN region IS NULL OR region = '' THEN 'Country'
+            ELSE 'Region'
+        END as geo_target_type,
 
         -- 5. Financials
         SAFE_CAST(spend AS FLOAT64) as cost,
