@@ -24,7 +24,7 @@ Raw data is extracted using custom Python scripts via official **APIs** for each
 - **Idempotency:** I enforce strict idempotency using DELETE (based on Date/Account) before INSERT. This allows any DAG to be re-run safely without creating duplicate records.
 
 **2. Loading Strategy:**
-The Google Ads pipeline comprises **17 distinct extraction modules** producing 18 raw tables and Meta Ads pipeline comprises **9 distinct extraction modules** producing 9 raw tables. The load process implements advanced data engineering logic:
+The Google Ads pipeline comprises **18 distinct extraction modules** producing 18 raw tables and Meta Ads pipeline comprises **9 distinct extraction modules** producing 9 raw tables. The load process implements advanced data engineering logic:
 
 - **Historical Backfill:** Captures the past 3 years of data to enable Year-over-Year (YoY) and Year-to-Date (YTD) performance comparison.
 
