@@ -11,6 +11,12 @@ WITH age_source AS (
     {% if target.name == 'dev' %}
     WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY)
     {% endif %}
+
+    -- DEDUPLICATION LOGIC: Keep only 1 row per unique combination
+    QUALIFY ROW_NUMBER() OVER(
+        PARTITION BY date, campaign_id, ad_group_id, age_range
+        ORDER BY _ingested_at DESC -- Keeps the latest ingestion
+    ) = 1
 ),
 
 gender_source AS (
@@ -21,6 +27,12 @@ gender_source AS (
     {% if target.name == 'dev' %}
     WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY)
     {% endif %}
+
+    -- DEDUPLICATION LOGIC: Keep only 1 row per unique combination
+    QUALIFY ROW_NUMBER() OVER(
+        PARTITION BY date, campaign_id, ad_group_id, gender
+        ORDER BY _ingested_at DESC
+    ) = 1
 ),
 
 -- 1. Process Age Data
