@@ -125,7 +125,7 @@ google_gender AS (
         gender,
 
         -- CRITICAL COLUMN
-        'Age Only' as report_granularity,
+        'Gender Only' as report_granularity,
 
         -- Financials & Metrics
         (SAFE_CAST(cost_micros AS FLOAT64) / 1000000) as cost,
