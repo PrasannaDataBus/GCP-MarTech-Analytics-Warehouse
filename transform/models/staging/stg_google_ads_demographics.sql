@@ -63,6 +63,9 @@ google_age AS (
         age_range as age_group,
         'Unspecified' as gender,
 
+        -- CRITICAL COLUMN
+        'Age Only' as report_granularity,
+
         -- Financials & Metrics
         (SAFE_CAST(cost_micros AS FLOAT64) / 1000000) as cost,
         SAFE_CAST(average_cpc AS FLOAT64) as average_cpc,
@@ -120,6 +123,9 @@ google_gender AS (
         -- DEMOGRAPHICS: Age is Unspecified, Gender is present
         'Unspecified' as age_group,
         gender,
+
+        -- CRITICAL COLUMN
+        'Age Only' as report_granularity,
 
         -- Financials & Metrics
         (SAFE_CAST(cost_micros AS FLOAT64) / 1000000) as cost,
