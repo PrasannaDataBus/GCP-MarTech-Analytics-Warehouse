@@ -131,6 +131,9 @@ renamed AS (
         -- Standardize Gender: 'female' -> 'Female'
         INITCAP(gender) as gender,
 
+        -- NEW COLUMN
+        'Combined' as report_granularity,
+
         -- 5. Financials
         SAFE_CAST(spend AS FLOAT64) as cost,
         SAFE_CAST(average_cpc AS FLOAT64) as average_cpc,
