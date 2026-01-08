@@ -72,7 +72,17 @@ google_age AS (
         ad_group_name,
 
         -- DEMOGRAPHICS: Age is present, Gender is Unspecified
-        age_range as age_group,
+        CASE
+            WHEN age_range = 'AGE_RANGE_18_24' THEN '18-24'
+            WHEN age_range = 'AGE_RANGE_25_34' THEN '25-34'
+            WHEN age_range = 'AGE_RANGE_35_44' THEN '35-44'
+            WHEN age_range = 'AGE_RANGE_45_54' THEN '45-54'
+            WHEN age_range = 'AGE_RANGE_55_64' THEN '55-64'
+            WHEN age_range = 'AGE_RANGE_65_UP' THEN '65+'
+            WHEN age_range = 'AGE_RANGE_UNDETERMINED' THEN 'Unknown'
+            ELSE 'Unknown' -- Catch-all for any future weird codes
+        END as age_group,
+
         'Unspecified' as gender,
 
         -- CRITICAL COLUMN
