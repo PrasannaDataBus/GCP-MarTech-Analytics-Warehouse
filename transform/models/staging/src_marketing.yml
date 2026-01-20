@@ -146,3 +146,13 @@ sources:
 
       - name: countries
         description: "Static reference list mapping 2-char country codes to full names."
+
+      # =========================================================
+      # EVENT DATES & RATES
+      # =========================================================
+
+      - name: event_dates_emea_latm_apac
+        description: "Dynamic reference list that contains event dates and rates for EMEA, LATAM, APAC."
+
+      - name: event_dates_north_america
+        description: "Static reference list that contains event dates and rates for North America."
