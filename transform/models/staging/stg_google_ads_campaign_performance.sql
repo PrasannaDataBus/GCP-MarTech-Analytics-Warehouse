@@ -80,35 +80,35 @@ joined_data AS (
     LEFT JOIN calendar cal
         ON (
             -- AMWC Asia-TDAC (Taiwan) -> Maps to 'AMWC ASIA' series
-            (ads.event_name = 'AMWC Asia-TDAC' AND cal.conference_editions LIKE 'AMWC ASIA%') OR
+            (ads.event_name = 'AMWC Asia-TDAC' AND cal.conference_editions LIKE '%AMWC ASIA%') OR
 
             -- AMWC SEA - ICAD (Thailand) -> Maps to 'AMWC SEA' series
-            (ads.event_name = 'AMWC SEA - ICAD' AND cal.conference_editions LIKE 'AMWC SEA%') OR
+            (ads.event_name = 'AMWC SEA - ICAD' AND cal.conference_editions LIKE '%AMWC SEA%') OR
 
             -- AMWC Americas (Miami) -> Maps to 'AMWC Americas' or old 'AMWC NA'
             (ads.event_name = 'AMWC Americas' AND (cal.conference_editions LIKE 'AMWC Americas%' OR cal.conference_editions LIKE 'AMWC NA%'
                                                    OR cal.conference_editions LIKE 'AMWC North Americas%')) OR
 
             -- AMWC LATAM (Medellin) -> Maps to 'AMWC LATAM' series
-            (ads.event_name = 'AMWC LATAM' AND cal.conference_editions LIKE 'AMWC LATAM%') OR
+            (ads.event_name = 'AMWC LATAM' AND cal.conference_editions LIKE '%AMWC LATAM%') OR
 
             -- AMWC Dubai Logic
-            (ads.event_name = 'AMWC Dubai' AND cal.conference_editions LIKE 'AMWC Dubai%') OR
+            (ads.event_name = 'AMWC Dubai' AND cal.conference_editions LIKE '%AMWC DUBAI%') OR
 
             -- TAS UK (London) -> Maps to 'TAS UK' series
-            (ads.event_name = 'TAS UK' AND cal.conference_editions LIKE 'TAS UK%') OR
+            (ads.event_name = 'TAS UK' AND cal.conference_editions LIKE '%TAS UK%') OR
 
             -- TAS (US - Vegas) -> EXCLUDE 'TAS UK' to avoid overlap
             (ads.event_name = 'TAS' AND cal.conference_editions LIKE 'TAS%' AND cal.conference_editions NOT LIKE 'TAS UK%') OR
 
             -- Standard Series
             (ads.event_name = 'VCS' AND cal.conference_editions LIKE 'VCS%') OR
-            (ads.event_name = 'FACE Conference' AND cal.conference_editions LIKE 'FACE%') OR
-            (ads.event_name = 'EUROGIN' AND cal.conference_editions LIKE 'EUROGIN%') OR
+            (ads.event_name = 'FACE Conference' AND cal.conference_editions LIKE '%FACE%') OR
+            (ads.event_name = 'EUROGIN' AND cal.conference_editions LIKE '%EUROGIN%') OR
 
             -- Main AMWC (Monaco) Catch-all
             -- Matches 'AMWC 2024', 'AMWC 2025' but excludes the regional ones above
-            (ads.event_name = 'AMWC Monaco' AND cal.conference_editions LIKE 'AMWC 2%')
+            (ads.event_name = 'AMWC Monaco' AND cal.conference_editions LIKE '% AMWC')
         )
         -- Must be within 400 days BEFORE the event ends
         AND ads.date <= cal.event_end_date
