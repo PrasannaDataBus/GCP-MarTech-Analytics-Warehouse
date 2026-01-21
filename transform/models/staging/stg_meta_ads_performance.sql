@@ -178,33 +178,33 @@ joined_data AS (
             -- MAPPING: Connects Normalized "Event Name" to Calendar "Conference Editions"
 
             -- AMWC Asia-TDAC (Taiwan)
-            (ads.event_name = 'AMWC Asia-TDAC' AND cal.conference_editions LIKE 'AMWC ASIA%') OR
+            (ads.event_name = 'AMWC Asia-TDAC' AND cal.conference_editions LIKE '%AMWC ASIA%') OR
 
             -- AMWC SEA - ICAD (Thailand)
-            (ads.event_name = 'AMWC SEA - ICAD' AND cal.conference_editions LIKE 'AMWC SEA%') OR
+            (ads.event_name = 'AMWC SEA - ICAD' AND cal.conference_editions LIKE '%AMWC SEA%') OR
 
             -- AMWC Americas (Miami)
             (ads.event_name = 'AMWC Americas' AND (cal.conference_editions LIKE 'AMWC Americas%' OR cal.conference_editions LIKE 'AMWC NA%' OR cal.conference_editions LIKE 'AMWC North Americas%')) OR
 
             -- AMWC LATAM (Medellin)
-            (ads.event_name = 'AMWC LATAM' AND cal.conference_editions LIKE 'AMWC LATAM%') OR
+            (ads.event_name = 'AMWC LATAM' AND cal.conference_editions LIKE '%AMWC LATAM%') OR
 
             -- AMWC Dubai Logic
-            (ads.event_name = 'AMWC Dubai' AND cal.conference_editions LIKE 'AMWC Dubai%') OR
+            (ads.event_name = 'AMWC Dubai' AND cal.conference_editions LIKE '%AMWC DUBAI%') OR
 
             -- TAS UK (London)
-            (ads.event_name = 'TAS UK' AND cal.conference_editions LIKE 'TAS UK%') OR
+            (ads.event_name = 'TAS UK' AND cal.conference_editions LIKE '%TAS UK%') OR
 
             -- TAS (US - Vegas) - Exclude UK to avoid overlap
             (ads.event_name = 'TAS' AND cal.conference_editions LIKE 'TAS%' AND cal.conference_editions NOT LIKE 'TAS UK%') OR
 
             -- Standard Series
             (ads.event_name = 'VCS' AND cal.conference_editions LIKE 'VCS%') OR
-            (ads.event_name = 'FACE Conference' AND cal.conference_editions LIKE 'FACE%') OR
-            (ads.event_name = 'EUROGIN' AND cal.conference_editions LIKE 'EUROGIN%') OR
+            (ads.event_name = 'FACE Conference' AND cal.conference_editions LIKE '%FACE%') OR
+            (ads.event_name = 'EUROGIN' AND cal.conference_editions LIKE '%EUROGIN%') OR
 
             -- AMWC Monaco (Flagship) - Matches 'AMWC 2024', 'AMWC 2025'
-            (ads.event_name = 'AMWC Monaco' AND cal.conference_editions LIKE 'AMWC 2%')
+            (ads.event_name = 'AMWC Monaco' AND cal.conference_editions LIKE '% AMWC')
         )
         -- TIME WINDOW: Ad must be within 400 days BEFORE the event (Approx 1 Year Cycle)
         AND ads.date <= cal.event_end_date
