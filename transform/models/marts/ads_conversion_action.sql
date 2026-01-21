@@ -14,43 +14,53 @@ WITH google_ads AS (
         id as unique_id,
         'Google Ads' as platform,
         date,
-        year,
-        month,
-        day,
-        week_number,
-        current_week_number,
+        -- Standard Date Parts
+        EXTRACT(YEAR FROM date) as year,
+        EXTRACT(MONTH FROM date) as month,
+        EXTRACT(DAY FROM date) as day,
+
+        -- EVENT CYCLE DIMENSIONS
+        -- Matches ads_campaign_performance exactly
+        week as week_display,             -- e.g. "Week 10"
+        week_number,                      -- e.g. 10 (Slicer Value)
+        week_number_to_sort,              -- Sort Order
+        weeks_left,                       -- Scorecard Value (e.g. "12")
 
         -- Dimensions
         event_name,
+        event_edition,                    -- e.g. "AMWC 2025"
+
         account_id,
+        account_name,                     -- Added for context
         campaign_id,
         campaign_name,
         campaign_status,
-        -- Google doesn't have ad_group/ad level for this report, so we pass NULL or 'N/A'
+
+        -- Google doesn't have ad_group/ad level for this report
         CAST(NULL AS STRING) as ad_group_name,
         CAST(NULL AS STRING) as ad_name,
+
+        -- Pricing / Rate Context
+        cut_off_rate,                     -- e.g. "EB", "FP"
+        cut_off_rate_sort_order,          -- e.g. 1, 2, 3
 
         -- Conversion Details
         conversion_action_name as conversion_name,
         conversion_category as conversion_raw_category,
 
-        -- GOOGLE MAPPING LOGIC
-        -- We clean up the Google names to match the Standard List
+        -- GOOGLE MAPPING LOGIC (Preserved)
         CASE
             -- We catch this specific historical tag BEFORE the general exclusion rule
             WHEN conversion_action_name = 'NOTWORKING-Do NOT USE' THEN 'PURCHASE'
 
             -- EXCLUDE THE DUPLICATE / JUNK TAGS
-            -- We map this to 'OTHER' so it doesn't inflate your Purchase count
             WHEN conversion_action_name LIKE '%NOTWORKING%' THEN 'OTHER'
             WHEN conversion_action_name LIKE '%Do NOT USE%' THEN 'OTHER'
 
             -- FIX THE "FAKE" LEADS
-
             WHEN conversion_action_name = 'Registration' THEN 'INITIATE_CHECKOUT'
 
             -- SPECIFIC TICKET SALES (The "Good" Revenue)
-
             WHEN conversion_action_name LIKE '%Ticket%' THEN 'PURCHASE'
 
             -- ACTUAL LEADS (High Quality)
@@ -64,7 +74,6 @@ WITH google_ads AS (
             WHEN conversion_category = 'SIGNUP' THEN 'SIGNUP'
             WHEN conversion_category = 'PAGE_VIEW' THEN 'PAGE_VIEW'
             WHEN conversion_category = 'ENGAGEMENT' THEN 'ENGAGEMENT'
-            -- Future proofing: If Google adds 'ADD_TO_CART' later, map it here
             WHEN conversion_category LIKE '%CART%' THEN 'ADD_TO_CART'
             WHEN conversion_category LIKE '%CHECKOUT%' THEN 'INITIATE_CHECKOUT'
             ELSE 'OTHER'
@@ -73,7 +82,7 @@ WITH google_ads AS (
         -- Metrics
         conversions,
 
-        -- SAFETY NET: Force 0.0 Value for non-Purchases
+        -- SAFETY NET: Force 0.0 Value for non-Purchases (Preserved)
         CASE
             -- Rule 1: Kill the "Registration" value immediately
             WHEN conversion_action_name IN ('Registration', 'Registrations') THEN 0.0
@@ -98,51 +107,54 @@ meta_ads AS (
         id as unique_id,
         'Meta Ads' as platform,
         date,
-        year,
-        month,
-        day,
+        -- Standard Date Parts
+        EXTRACT(YEAR FROM date) as year,
+        EXTRACT(MONTH FROM date) as month,
+        EXTRACT(DAY FROM date) as day,
+
+        -- EVENT CYCLE DIMENSIONS
+        week as week_display,
         week_number,
-        current_week_number,
+        week_number_to_sort,
+        weeks_left,
 
         -- Dimensions
         event_name,
+        event_edition,
+
         account_id,
+        account_name,
         campaign_id,
         campaign_name,
-        -- Meta implies status is active if it's spending, but we can pass NULL
+        -- Meta implies status is active if it's spending, passing NULL to match schema
         CAST(NULL AS STRING) as campaign_status,
         ad_group_name,
         ad_name,
 
+        -- Pricing / Rate Context
+        cut_off_rate,
+        cut_off_rate_sort_order,
+
         -- Conversion Details
         conversion_action as conversion_name,
-        -- Meta doesn't have a separate category column, so we use the name again
         conversion_action as conversion_raw_category,
 
-        -- STRICT META MAPPING LOGIC (Anti-Duplicate)
-        -- Order matters! Specific rules (Purchase) go before generic ones (View).
+        -- STRICT META MAPPING LOGIC (Preserved)
         CASE
             -- THE CHOSEN ONE (Reliable Web Pixel Purchase)
-            -- We ignore 'omni_purchase' and 'purchase' to avoid double counting
-
             WHEN conversion_action = 'offsite_conversion.fb_pixel_purchase' THEN 'PURCHASE'
 
             -- LEADS & SIGNUPS
-
             WHEN conversion_action = 'offsite_conversion.fb_pixel_lead' THEN 'LEAD'
-
             WHEN LOWER(conversion_action) LIKE '%complete_registration%' THEN 'SIGNUP'
             WHEN LOWER(conversion_action) LIKE '%subscribe%' THEN 'SIGNUP'
 
             -- COMMERCE INTENT (Pre-Purchase)
-
             WHEN LOWER(conversion_action) LIKE '%add_to_cart%' THEN 'ADD_TO_CART'
-
             WHEN LOWER(conversion_action) LIKE '%checkout%' THEN 'INITIATE_CHECKOUT'
             WHEN LOWER(conversion_action) LIKE '%add_payment_info%' THEN 'INITIATE_CHECKOUT'
 
             -- SITE ACTIVITY
-
             WHEN LOWER(conversion_action) LIKE '%content_view%' THEN 'PAGE_VIEW'
             WHEN LOWER(conversion_action) LIKE '%view_content%' THEN 'PAGE_VIEW'
             WHEN LOWER(conversion_action) LIKE '%landing_page_view%' THEN 'PAGE_VIEW'
@@ -163,16 +175,15 @@ meta_ads AS (
             WHEN LOWER(conversion_action) LIKE '%video_view%' THEN 'ENGAGEMENT'
             WHEN LOWER(conversion_action) LIKE '%post%' THEN 'ENGAGEMENT'
 
-            ELSE 'OTHER' -- Maps 'omni_purchase' and generic 'purchase' to OTHER
+            ELSE 'OTHER'
         END as standardized_conversion_type,
 
         -- Metrics
         conversions,
 
-        -- SAFETY CHECK: Zero out revenue for non-monetary events to prevent the $481k Page View error
+        -- SAFETY CHECK: Zero out revenue for non-monetary events (Preserved)
         CASE
             WHEN conversion_action = 'offsite_conversion.fb_pixel_purchase' THEN conversion_value
-            -- Allow Purchase value. For everything else, force 0.0 to be safe.
             ELSE 0.0
         END as conversion_value,
 
