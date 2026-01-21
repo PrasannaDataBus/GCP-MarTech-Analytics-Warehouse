@@ -14,30 +14,41 @@ WITH google_campaigns AS (
         id as unique_id,
         'Google Ads' as platform,
         date,
-        year,
-        month,
-        day,
-        week_number,
-        current_week_number,
+        -- Date Parts
+        EXTRACT(YEAR FROM date) as year,
+        EXTRACT(MONTH FROM date) as month,
+        EXTRACT(DAY FROM date) as day,
 
-        -- Dimensions
+        -- Event Cycle Dimensions (NEW)
+        week as week_display,             -- e.g. "Week 10"
+        week_number,                      -- e.g. 10 (Slicer Value)
+        week_number_to_sort,              -- Sort order
+        weeks_left,                       -- Card Value (Current status)
+
+        -- Event Context
         event_name,
+        event_edition,                    -- NEW: e.g. "AMWC 2025"
+
         account_id,
-        account_name,        -- Added: Missing in previous version
+        account_name,
         campaign_id,
         campaign_name,
-        campaign_status,     -- Added: Critical for filtering
+        campaign_status,
 
-        -- Context
-        channel_type,        -- e.g. 'PERFORMANCE_MAX'
-        bidding_strategy_type, -- Added: Useful for optimization analysis
+        -- Pricing / Rate Context (NEW)
+        cut_off_rate,                     -- e.g. "EB", "FP"
+        cut_off_rate_sort_order,          -- e.g. 1, 2, 3
+
+        -- Channel Context
+        channel_type,
+        bidding_strategy_type,
 
         -- Metrics
         cost,
         impressions,
         clicks,
 
-        -- Calculated Metrics (Optional, but good for QA)
+        -- Calculated Metrics
         ctr,
         SAFE_DIVIDE(cost, clicks) as average_cpc,
 
@@ -49,31 +60,43 @@ WITH google_campaigns AS (
 meta_campaigns AS (
     -- Meta is originally at Ad Level, so we GROUP BY Campaign
     SELECT
+        -- Create a unique ID for the Campaign-Day grain
         FARM_FINGERPRINT(CONCAT(CAST(date AS STRING), CAST(campaign_id AS STRING))) as unique_id,
         'Meta Ads' as platform,
         date,
-        MAX(year) as year,
-        MAX(month) as month,
-        MAX(day) as day,
-        MAX(week_number) as week_number,
-        MAX(current_week_number) as current_week_number,
 
-        -- Dimensions
+        -- Date Parts (Uniform across the group)
+        EXTRACT(YEAR FROM date) as year,
+        EXTRACT(MONTH FROM date) as month,
+        EXTRACT(DAY FROM date) as day,
+
+        -- Event Cycle Dimensions (Aggregated using MAX since they are identical per day)
+        MAX(week) as week_display,
+        MAX(week_number) as week_number,
+        MAX(week_number_to_sort) as week_number_to_sort,
+        MAX(weeks_left) as weeks_left,
+
+        -- Event Context
         MAX(event_name) as event_name,
+        MAX(event_edition) as event_edition,
+
         MAX(account_id) as account_id,
-        MAX(account_name) as account_name, -- Added
+        MAX(account_name) as account_name,
         campaign_id,
         MAX(campaign_name) as campaign_name,
 
-        -- Meta Staging (Ad Level) usually doesn't have Campaign Status.
-        -- We pass NULL or 'Unknown' to match the schema.
+        -- Meta Staging doesn't have status, passing NULL
         CAST(NULL AS STRING) as campaign_status,
 
-        -- Context
-        'Social' as channel_type,
-        CAST(NULL AS STRING) as bidding_strategy_type, -- Meta doesn't have this in performance report
+        -- Pricing / Rate Context
+        MAX(cut_off_rate) as cut_off_rate,
+        MAX(cut_off_rate_sort_order) as cut_off_rate_sort_order,
 
-        -- Metrics (SUM them up)
+        -- Channel Context
+        'Social' as channel_type,
+        CAST(NULL AS STRING) as bidding_strategy_type,
+
+        -- Metrics (Summed from Ad Level)
         SUM(cost) as cost,
         SUM(impressions) as impressions,
         SUM(clicks) as clicks,
@@ -89,7 +112,7 @@ meta_campaigns AS (
         date, campaign_id
 )
 
--- UNION BOTH
+-- UNION BOTH PLATFORMS
 SELECT * FROM google_campaigns
 UNION ALL
 SELECT * FROM meta_campaigns
