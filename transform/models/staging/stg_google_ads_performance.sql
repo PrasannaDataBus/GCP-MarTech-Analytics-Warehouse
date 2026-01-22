@@ -11,6 +11,13 @@ WITH source AS (
     {% if target.name == 'dev' %}
     WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY)
     {% endif %}
+
+    -- DEDUPLICATION
+    -- This prevents the 16M inflation bug. Do not remove.
+    QUALIFY ROW_NUMBER() OVER(
+        PARTITION BY date, campaign_id, ad_group_id, ad_id, device, ad_network_type
+        ORDER BY _ingested_at DESC
+    ) = 1
 ),
 
 -- 1. Load Calendar (The "Truth" Table)
