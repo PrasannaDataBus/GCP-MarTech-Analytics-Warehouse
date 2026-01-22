@@ -21,7 +21,12 @@ calendar AS (
 renamed AS (
     SELECT
         -- 1. Generate Unique ID (Ad Level)
-        FARM_FINGERPRINT(CONCAT(CAST(date AS STRING), CAST(ad_id AS STRING))) as id,
+        FARM_FINGERPRINT(CONCAT(
+            CAST(date AS STRING),
+            CAST(ad_id AS STRING),
+            IFNULL(device, ''),
+            IFNULL(ad_network_type, '')
+        )) as id,
 
         -- 2. Standardize Date
         CAST(date AS DATE) as date,
