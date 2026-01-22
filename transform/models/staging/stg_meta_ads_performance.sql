@@ -268,6 +268,8 @@ SELECT
     ad_group_name,
     ad_id, ad_name,
     cost,
+    average_cpc,
+    cpm,
     impressions,
     clicks,
     ctr,
