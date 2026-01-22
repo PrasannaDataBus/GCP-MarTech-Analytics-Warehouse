@@ -11,6 +11,12 @@ WITH source AS (
     {% if target.name == 'dev' %}
     WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY)
     {% endif %}
+
+    -- ROI PROTECTION: Deduplication
+    QUALIFY ROW_NUMBER() OVER(
+        PARTITION BY date, campaign_id, conversion_action_id, conversion_category
+        ORDER BY _ingested_at DESC
+    ) = 1
 ),
 
 -- 1. Load Calendar (The "Truth" Table)
