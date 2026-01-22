@@ -113,7 +113,7 @@ google_gender AS (
 
         -- DEMOGRAPHICS
         'Unspecified' as age_group,
-        gender,
+        INITCAP(gender) as gender,
         'Gender Only' as report_granularity,
 
         -- METRICS
