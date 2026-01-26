@@ -24,7 +24,7 @@ Raw data is extracted using custom Python scripts via official **APIs** for each
 - **Idempotency:** I enforce strict idempotency using DELETE (based on Date/Account) before INSERT. This allows any DAG to be re-run safely without creating duplicate records.
 
 **2. Loading Strategy:**
-The Google Ads pipeline comprises **18 distinct extraction modules** producing 18 raw tables and Meta Ads pipeline comprises **9 distinct extraction modules** producing 9 raw tables. The load process implements advanced data engineering logic:
+The Google Ads pipeline comprises **18 distinct extraction modules** producing 18 raw tables, Meta Ads pipeline comprises **9 distinct extraction modules** producing 9 raw tables and Other (CRM related) extraction comprises **2 distinct extraction modules**. The load process implements advanced data engineering logic:
 
 - **Historical Backfill:** Captures the past 3 years of data to enable Year-over-Year (YoY) and Year-to-Date (YTD) performance comparison.
 
@@ -55,10 +55,27 @@ The Google Ads pipeline comprises **18 distinct extraction modules** producing 1
 
 **Transformation Logics:**
 
-- Standardization
-- Smart Parsing
+- **Schema Standardization:** Enforces strict data typing across all tables (e.g., SAFE_CAST to INT64/FLOAT64) and normalizes column names to snake_case, ensuring consistent schema definitions regardless of the source platform.
+
+
+- **Smart Parsing & Normalization:** Cleans inconsistent dimensional data using CASE logic to handle legacy naming conventions, ensuring historical data aligns with current reporting structures.
+
+
+- **Global Event Mapping:** Automatically joins ad data with the `Global Events Calendar` to map generic campaigns to specific event editions (e.g., mapping "LEAP Riyadh" to "LEAP Riyadh 2025").
+
+
+- **Dynamic Pricing tiers:** Calculates "Cut-Off Rates" (e.g., *SEB*, *EB*, *Advance*, *FP*, *Standard*, *Onsite*) based on the transaction date relative to the event calendar.
+
+
+- **Countdown Logic:** Computes `Weeks Out` metrics (e.g., "Week 10", "Week 0") to enable time-relative performance curves for comparing events performance year-over-year.
+
+
+- **Multi-Currency Normalization:** Converts cost metrics from local currencies (GBP, EUR, etc.) into a unified **USD** baseline for consistent financial reporting.
 
 **Cost Saving (Slim CI):** In the Development Environment, I use Jinja Macros ({% if target.name == 'dev' %}) to limit processing to the last 14 days. This reduces cloud compute costs by >90% during testing.
+
+
+- Full Historical Integrity (Prod): While Dev is optimized for speed, the Production pipeline automatically bypasses these filters to process the full historical dataset, ensuring accurate Year-over-Year (YoY) and Year-to-Date (YTD) trend analysis.
 
 ---
 
@@ -68,7 +85,7 @@ The Google Ads pipeline comprises **18 distinct extraction modules** producing 1
 
 **Materialization Strategy:** Configured as table.
 
-- Why? Tables persist data physically. This is crucial for BI tools (Looker) because complex UNION ALL operations and Joins are computed once during the morning run, protecting the dashboard from slow query times.
+- Why? Tables persist data physically. This is crucial for BI tools (Power BI) because complex UNION ALL operations and Joins are computed once during the morning run, protecting the dashboard from slow query times.
 
 **Logic:**
 
@@ -95,9 +112,9 @@ I deliberately group the Transformation phase (Silver -> Gold) into a single ato
 
 **Deployment Model**
 
-- **Airflow-Dev:** Contains 32 DAGs using **PostgreSQL**. No scheduling enabled. Used strictly for development testing, unit validation, and "Slim CI" runs.
+- **Airflow-Dev:** Contains 34 DAGs using **PostgreSQL**. No scheduling enabled. Used strictly for development testing, unit validation, and "Slim CI" runs.
 
-- **Airflow-Prod:** Contains 32 DAGs using **PostgreSQL**. Daily scheduling is active. Used for deploying and orchestrating core ETL processes on full data history.
+- **Airflow-Prod:** Contains 34 DAGs using **PostgreSQL**. Daily scheduling is active. Used for deploying and orchestrating core ETL processes on full data history.
 
 ---
 
@@ -110,11 +127,17 @@ The single source of truth for all metric definitions, schema lineage, and colum
 
 - **Content:** Detailed data points for Google Ads, Meta Ads, LinkedIn Ads, and TikTok Ads (separated by sheets).
 
-**Key Reference: Marketing Bronze Sheet**
+**Key References:**
+
+- Marketing Bronze Sheet, 
+- Marketing Silver Sheet, 
+- Marketing Gold Sheet.
 
 This specific sheet defines the exact schema for the **Bronze (Raw)** layer in BigQuery. It is used to validate Python extraction scripts and dbt source definitions (`src_marketing.yml`).
 
 **Schema Definition Columns:**
+
+**Marketing Bronze Sheet:**
 
 - `dataset`: The target BigQuery dataset.
 
@@ -125,6 +148,42 @@ This specific sheet defines the exact schema for the **Bronze (Raw)** layer in B
 - `row`: Row number reference.
 
 - `column_name`: The exact column name as it appears in BigQuery.
+
+**Marketing Silver Sheet:**
+
+- `env`: The target execution environment (e.g., `dev`, `prod`).
+
+- `layer`: The pipeline stage identifier (e.g., `silver`).
+
+- `logic`: The type of operation being performed (e.g., `transform`).
+
+- `materialization`: The storage strategy used in BigQuery (e.g., `view`).
+
+- `script_name`: The technical name of the dbt model or transformation script (e.g., `stg_google_ads_performance`).
+
+- `dataset_name`: The target BigQuery dataset where the view is created (e.g., `marketing_prod_silver`).
+
+- `column_no`: The ordinal position of the column in the final view.
+
+- `column_name`: The standardized, snake_case column name as it appears in the Silver view.
+
+**Marketing Gold Sheet:**
+
+- `env`: The target execution environment (e.g., `dev`, `prod`).
+
+- `layer`: The pipeline stage identifier (e.g., `gold`).
+
+- `logic`: The business logic applied to the table (e.g., `business_ready`).
+
+- `materialization`: The storage strategy used in BigQuery (e.g., `table`).
+
+- `script_name`: The technical name of the dbt model (e.g., `ads_campaign_performance`, `ads_conversion_action`).
+
+- `dataset_name`: The target BigQuery dataset where the table is created (e.g., `marketing_prod_gold`).
+
+- `column_no`: The ordinal position of the column in the final table.
+
+- `column_name`: The exact column name as it appears in the Gold table.
 
 ---
 
@@ -245,6 +304,43 @@ We strive to maintain high engineering standards:
 - Prod master	v1.x.x	Stable and verified releases
 
 ---
+
+## 📊 Analytics & Reporting (Power BI)
+
+The final output of the pipeline is a comprehensive **Ads Marketing Command Center** dashboard deployed on the central server. This visualizes the Gold Layer data, enabling stakeholders to track & make decisions based on the granular performance metrics:
+
+**Key Reporting Modules:**
+
+- **💰 Financial Performance:**
+Real-time tracking of **Spend, Sales, Revenue, and ROAS**.
+
+  - *Analysis:* Year-over-Year (YoY) and Year-to-Date (YTD) growth.
+  - *Dimensions:* Filter by Platform, Event, Event Edition, Campaign, Pricing Tier (`cut_off_rate`), and Sales Curve (`weeks`).
+
+
+- **📈 Traffic & Engagement:**
+High-level view of **Impressions, Clicks, CTR%, and CPC**.
+  - *Drill-down:* Analyze efficiency across specific Channels (`channel_type`) and Campaign Strategies.
+
+
+- **🌍 Geographic Insights:**
+Geo-spatial analysis of market efficiency.
+  - *Metrics:* Impressions vs. Engagement by location.
+  - *Granularity:* Drill down by **Country, Region, and Target Type** (`geo_target_type`).
+
+
+- **👥 Audience Demographics:**
+Segmentation analysis to identify high-value personas.
+  - *Breakdown:* Performance metrics split by **Age Group and Gender**.
+
+
+- **🚀 Ongoing Development:**
+  Additional analytics modules (e.g., Search Term Analysis, Attribution Modeling, etc..) are currently in the engineering roadmap.
+
+### Dashboard Preview:
+
+![Ads Analytics - Global Dashboard](assets/Ads%20Analytics%20-%20Global.jpg)
+*(Note: Sensitive financial figures, legends and other numbers have been masked for data privacy).*
 
 🧠 Author & Maintainer
 
