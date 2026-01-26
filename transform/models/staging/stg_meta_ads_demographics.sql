@@ -11,6 +11,13 @@ WITH source AS (
     {% if target.name == 'dev' %}
     WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY)
     {% endif %}
+
+    -- DEDUPLICATION
+    -- Prevents the inflation bug.
+    QUALIFY ROW_NUMBER() OVER(
+        PARTITION BY date, campaign_id, adset_id, age, gender
+        ORDER BY _ingested_at DESC
+    ) = 1
 ),
 
 -- 1. Load Calendar
