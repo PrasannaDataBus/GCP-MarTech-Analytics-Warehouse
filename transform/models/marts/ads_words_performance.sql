@@ -148,6 +148,7 @@ SELECT
 
     event_edition,
     event_name,
+    campaign_id,
     campaign_name,
 
     -- Slicer Columns
@@ -189,6 +190,7 @@ GROUP BY
     platform,
     event_edition,
     event_name,
+    campaign_id,
     campaign_name,
     week_display,
     week_number,
