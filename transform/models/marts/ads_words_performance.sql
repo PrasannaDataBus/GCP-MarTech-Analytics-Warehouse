@@ -69,9 +69,12 @@ meta_source AS (
         cut_off_rate,
         cut_off_rate_sort_order,
 
-        -- Text to Analyze: Concatenate Headline + Body
-        -- We add a space ' ' to ensure "HeadlineWord" doesn't merge with "BodyWord"
-        CONCAT(IFNULL(ad_headline, ''), ' ', IFNULL(ad_primary_text, '')) as raw_text,
+        -- PATCH: Handle missing creatives (Applied to META only)
+        -- If headline/body are NULL, use a placeholder so the row is preserved
+        CASE
+            WHEN ad_headline IS NULL AND ad_primary_text IS NULL THEN '_unknown_creative_'
+            ELSE CONCAT(IFNULL(ad_headline, ''), ' ', IFNULL(ad_primary_text, ''))
+        END as raw_text,
 
         -- Metrics
         cost,
@@ -82,7 +85,6 @@ meta_source AS (
         currency
 
     FROM {{ ref('stg_meta_ads_creative_performance') }}
-    WHERE ad_headline IS NOT NULL OR ad_primary_text IS NOT NULL
 ),
 
 -- 3. Combine Sources
