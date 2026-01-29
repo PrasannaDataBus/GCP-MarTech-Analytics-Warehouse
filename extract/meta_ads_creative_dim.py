@@ -18,6 +18,7 @@ from google.cloud import bigquery
 # --- Meta SDK Imports ---
 from facebook_business.api import FacebookAdsApi
 from facebook_business.adobjects.adaccount import AdAccount
+from facebook_business.adobjects.adcreative import AdCreative
 from facebook_business.adobjects.user import User
 from facebook_business.exceptions import FacebookRequestError
 
@@ -112,9 +113,19 @@ def get_bq_client():
 
 # --- HELPER: Get Ad Accounts ---
 def get_ad_accounts():
-    """Fetches all Ad Accounts attached to the System User."""
+    """Fetches all Ad Accounts attached to the System User with Retry Logic."""
     me = User(fbid = 'me')
-    my_accounts = me.get_ad_accounts(fields = ['name', 'account_id', 'currency'])
+
+    try:
+        my_accounts = me.get_ad_accounts(fields = ['name', 'account_id', 'currency'])
+    except FacebookRequestError as e:
+        # If blocked at start-up, wait and try again
+        if e.api_error_code() in [17, 80004]:
+            print("! Rate limit hit immediately. Sleeping 5 minutes before retrying account fetch...")
+            time.sleep(300)  # Wait 5 mins
+            my_accounts = me.get_ad_accounts(fields = ['name', 'account_id', 'currency'])
+        else:
+            raise e
 
     accounts_list = []
     for acc in my_accounts:
@@ -188,45 +199,140 @@ def parse_creative_details(creative):
 
 # --- EXTRACTION FUNCTION ---
 def extract_creative_dim(account_id: str, account_name: str):
-    """Extract Creative Dimensions to merge with Performance"""
-
+    """
+    Hybrid Extraction with Rate Limit Handling and Correct Batch Fetching
+    """
     print(f"Querying Creative Dimensions for {account_name} ({account_id})...")
-
     formatted_id = account_id if account_id.startswith('act_') else f"act_{account_id}"
     account = AdAccount(formatted_id)
 
-    data_rows = []
+    # STORAGE
+    all_creatives_map = {}
 
-    # Fetch ADS using the corrected FIELDS list
-    creatives = account.get_ad_creatives(fields=FIELDS, params={'limit': 100})
+    # ---------------------------------------------------------
+    # STEP 1: The "Dump" (Fetch Public Library)
+    # ---------------------------------------------------------
+    print("  -> Step 1: Fetching Public Creative Library...")
 
-    # Iterate through the cursor (pagination is automatic in the SDK loop)
-    count = 0
-    for item in creatives:
-        count += 1
-        if count % 200 == 0:
-            print(f"  ...fetched {count} creative dimensions")
+    try:
+        # Use Limit 50 to prevent 500 errors
+        library_creatives = account.get_ad_creatives(fields = FIELDS, params = {'limit': 50})
 
-        parsed = parse_creative_details(item)
+        count = 0
+        for item in library_creatives:
+            count += 1
+            if count % 50 == 0:
+                print(f"...fetched {count} library creatives")
+                # THROTTLING: Increased to 2s to prevent '80004' Rate Limit
+                time.sleep(27)
 
-        data_rows.append({
-            'creative_id': item['id'],
-            'creative_name': item.get('name'), # May contain {{product.name}} for catalog ads
-            'account_id': account_id.replace("act_", ""),
-            'account_name': account_name,
-            'status': item.get('status'),
+            parsed = parse_creative_details(item)
+            all_creatives_map[item['id']] = {
+                'creative_id': item['id'],
+                'creative_name': item.get('name'),
+                'account_id': account_id.replace("act_", ""),
+                'account_name': account_name,
+                'status': item.get('status'),
+                'headline': parsed['headline'],
+                'body': parsed['body'],
+                'destination_url': parsed['destination_url'],
+                'call_to_action_type': parsed['call_to_action_type'],
+                'image_url': parsed['image_url'],
+                '_ingested_at': datetime.now()
+            }
 
-            # Parsed Fields
-            'headline': parsed['headline'],
-            'body': parsed['body'],
-            'destination_url': parsed['destination_url'],
-            'call_to_action_type': parsed['call_to_action_type'],
-            'image_url': parsed['image_url'],
+    except FacebookRequestError as e:
+        print(f" ! Warning: Step 1 interrupted at item {count}. Meta Error: {e.api_error_message()}")
+        if e.api_error_code() in [17, 80004]:
+            print(" ! RATE LIMIT HIT. Sleeping 120 seconds before Step 2...")
+            time.sleep(120)
+    except Exception as e:
+        print(f" ! Warning: Step 1 interrupted. Moving to Step 2. Error: {e}")
 
-            '_ingested_at': datetime.now()
-        })
+    # ---------------------------------------------------------
+    # STEP 2: The "Gap Fill" (Find Missing Active & Paused Creatives)
+    # ---------------------------------------------------------
+    print("-> Step 2: Checking Active & Paused Ads for 'Shadow' Creatives...")
 
-    df = pd.DataFrame(data_rows)
+    try:
+        # Retry Loop for Active Ads List
+        target_ads = None
+        max_retries = 3
+        attempt = 0
+        while attempt < max_retries:
+            try:
+                target_ads = account.get_ads(
+                    fields = ['creative'],
+                    params = {'status': ['ACTIVE', 'PAUSED'], 'limit': 1000}
+                )
+                break
+            except FacebookRequestError as e:
+                if e.api_error_code() in [17, 80004]:
+                    attempt += 1
+                    wait_time = 300 * attempt
+                    print(f"! Step 2 blocked by Rate Limit. Sleeping {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    raise e
+
+        if not target_ads:
+            print("! Critical: Step 2 failed to fetch ads list. Skipping.")
+            df = pd.DataFrame(list(all_creatives_map.values()))
+            return df
+
+        # Identify missing IDs
+        needed_ids = set()
+        for ad in target_ads:
+            if 'creative' in ad and 'id' in ad['creative']:
+                needed_ids.add(ad['creative']['id'])
+
+        found_ids = set(all_creatives_map.keys())
+        missing_ids = list(needed_ids - found_ids)
+
+        if missing_ids:
+            print(f"Found {len(missing_ids)} active/paused creatives missing from library. Fetching explicitly...")
+
+            # Batch Fetch using AdCreative.get_by_ids (THE CORRECT WAY)
+            chunk_size = 50
+            for i in range(0, len(missing_ids), chunk_size):
+                chunk = missing_ids[i:i + chunk_size]
+
+                try:
+                    # FIX: Using SDK class method instead of raw URL hacking
+                    fetched_objects = AdCreative.get_by_ids(chunk, fields = FIELDS)
+
+                    for item in fetched_objects:
+                        parsed = parse_creative_details(item)
+                        all_creatives_map[item['id']] = {
+                            'creative_id': item['id'],
+                            'creative_name': item.get('name', 'System Generated Creative'),
+                            'account_id': account_id.replace("act_", ""),
+                            'account_name': account_name,
+                            'status': item.get('status', 'ACTIVE'), # Defaulting to Active for simplicity
+                            'headline': parsed['headline'],
+                            'body': parsed['body'],
+                            'destination_url': parsed['destination_url'],
+                            'call_to_action_type': parsed['call_to_action_type'],
+                            'image_url': parsed['image_url'],
+                            '_ingested_at': datetime.now()
+                        }
+
+                    # Throttle Step 2
+                    time.sleep(1)
+
+                except Exception as e:
+                    print(f"Warning: Failed to fetch chunk {i}. Error: {e}")
+        else:
+            print("No missing active creatives found.")
+
+    except Exception as e:
+        print(f"!Error in Step 2: {e}")
+
+    # ---------------------------------------------------------
+    # RETURN
+    # ---------------------------------------------------------
+    print(f"Final Total: {len(all_creatives_map)} creatives.")
+    df = pd.DataFrame(list(all_creatives_map.values()))
     return df
 
 
