@@ -159,7 +159,7 @@ phrase_stats AS (
 -- 6. Global Stats (Ignore Date to get Grand Totals)
 global_phrase_agg AS (
     SELECT
-        campaign_id,
+        event_edition,
         word,
         clean_phrase,
         -- Summing across ALL dates
@@ -171,7 +171,7 @@ global_phrase_agg AS (
 -- 7. Build the Global Tooltip String
 global_tooltip_map AS (
     SELECT
-        campaign_id,
+        event_edition,
         word,
         -- Create the list based on TOTAL volume, not daily
         ARRAY_TO_STRING(
@@ -223,7 +223,7 @@ SELECT
 FROM phrase_stats p
 -- Join the global stats on Campaign + Word
 LEFT JOIN global_tooltip_map g
-    ON p.campaign_id = g.campaign_id
+    ON p.event_edition = g.event_edition
     AND p.word = g.word
 
 GROUP BY
