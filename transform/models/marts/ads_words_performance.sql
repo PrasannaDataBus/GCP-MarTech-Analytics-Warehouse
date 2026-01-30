@@ -154,69 +154,90 @@ phrase_stats AS (
 
     FROM tokenized
     GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17
+),
+
+-- 6. Global Stats (Ignore Date to get Grand Totals)
+global_phrase_agg AS (
+    SELECT
+        campaign_id,
+        word,
+        clean_phrase,
+        -- Summing across ALL dates
+        SUM(phrase_impressions) as total_global_impressions
+    FROM phrase_stats
+    GROUP BY 1, 2, 3
+),
+
+-- 7. Build the Global Tooltip String
+global_tooltip_map AS (
+    SELECT
+        campaign_id,
+        word,
+        -- Create the list based on TOTAL volume, not daily
+        ARRAY_TO_STRING(
+            ARRAY_AGG(
+                CONCAT(clean_phrase, ' (', total_global_impressions, ')')
+                ORDER BY total_global_impressions DESC LIMIT 10
+            ),
+            '\n'
+        ) as global_top_combinations
+    FROM global_phrase_agg
+    GROUP BY 1, 2
 )
 
--- 5. Final Aggregation
+-- 8. Final Join (Daily Data + Global Tooltip)
 SELECT
-    -- Unique ID for PBI (Date + Event + Platform + Word)
-    FARM_FINGERPRINT(CONCAT(CAST(date AS STRING), event_edition, platform, CAST(campaign_id AS STRING), word)) as id,
+    FARM_FINGERPRINT(CONCAT(CAST(p.date AS STRING), p.event_edition, p.platform, CAST(p.campaign_id AS STRING), p.word)) as id,
 
-    date,
-    platform,
+    p.date,
+    p.platform,
+    EXTRACT(YEAR FROM p.date) as year,
+    EXTRACT(MONTH FROM p.date) as month,
+    EXTRACT(DAY FROM p.date) as day,
+    p.event_edition,
+    p.event_name,
+    p.campaign_id,
+    p.campaign_name,
+    p.week_display,
+    p.week_number,
+    p.week_number_to_sort,
+    p.weeks_left,
+    p.cut_off_rate,
+    p.cut_off_rate_sort_order,
 
-    -- Date Parts (Consistent with Campaign Table)
-    EXTRACT(YEAR FROM date) as year,
-    EXTRACT(MONTH FROM date) as month,
-    EXTRACT(DAY FROM date) as day,
+    p.word,
 
-    event_edition,
-    event_name,
-    campaign_id,
-    campaign_name,
+    -- USE THE GLOBAL STRING (Joined from Step 7)
+    g.global_top_combinations as top_search_combinations,
 
-    -- Slicer Columns
-    week_display,
-    week_number,
-    week_number_to_sort,
-    weeks_left,
-    cut_off_rate,
-    cut_off_rate_sort_order,
+    -- Daily Stats
+    SUM(p.phrase_cost) as cost,
+    SUM(p.phrase_impressions) as impressions,
+    SUM(p.phrase_clicks) as clicks,
+    SAFE_DIVIDE(SUM(p.phrase_clicks), SUM(p.phrase_impressions)) as ctr,
+    SAFE_DIVIDE(SUM(p.phrase_cost), SUM(p.phrase_clicks)) as average_cpc,
+    SUM(p.phrase_conversions) as conversions,
+    SUM(p.phrase_conversion_value) as conversion_value,
+    MAX(p.currency) as currency
 
-    -- The Atomic Unit
-    word,
+FROM phrase_stats p
+-- Join the global stats on Campaign + Word
+LEFT JOIN global_tooltip_map g
+    ON p.campaign_id = g.campaign_id
+    AND p.word = g.word
 
-    -- PERFECT TOOLTIP:
-    -- Aggregates the unique, pre-summed phrases. No duplicates.
-    ARRAY_TO_STRING(
-        ARRAY_AGG(
-            CONCAT(clean_phrase, ' (', phrase_impressions, ')')
-            ORDER BY phrase_impressions DESC LIMIT 5
-        ),
-        '\n'
-    ) as top_search_combinations,
-
-    -- Total Stats for the Word
-    SUM(phrase_cost) as cost,
-    SUM(phrase_impressions) as impressions,
-    SUM(phrase_clicks) as clicks,
-    SAFE_DIVIDE(SUM(phrase_clicks), SUM(phrase_impressions)) as ctr,
-    SAFE_DIVIDE(SUM(phrase_cost), SUM(phrase_clicks)) as average_cpc,
-    SUM(phrase_conversions) as conversions,
-    SUM(phrase_conversion_value) as conversion_value,
-    MAX(currency) as currency
-
-FROM phrase_stats
 GROUP BY
-    date,
-    platform,
-    event_edition,
-    event_name,
-    campaign_id,
-    campaign_name,
-    week_display,
-    week_number,
-    week_number_to_sort,
-    weeks_left,
-    cut_off_rate,
-    cut_off_rate_sort_order,
-    word
+    p.date,
+    p.platform,
+    p.event_edition,
+    p.event_name,
+    p.campaign_id,
+    p.campaign_name,
+    p.week_display,
+    p.week_number,
+    p.week_number_to_sort,
+    p.weeks_left,
+    p.cut_off_rate,
+    p.cut_off_rate_sort_order,
+    p.word,
+    g.global_top_combinations
