@@ -160,18 +160,24 @@ phrase_stats AS (
 global_phrase_agg AS (
     SELECT
         event_edition,
+        platform,
+        campaign_id,
+        cut_off_rate,
         word,
         clean_phrase,
         -- Summing across ALL dates
         SUM(phrase_impressions) as total_global_impressions
     FROM phrase_stats
-    GROUP BY 1, 2, 3
+    GROUP BY 1, 2, 3, 4, 5, 6
 ),
 
 -- 7. Build the Global Tooltip String
 global_tooltip_map AS (
     SELECT
         event_edition,
+        platform,
+        campaign_id,
+        cut_off_rate,
         word,
         -- Create the list based on TOTAL volume, not daily
         ARRAY_TO_STRING(
@@ -182,7 +188,7 @@ global_tooltip_map AS (
             '\n'
         ) as global_top_combinations
     FROM global_phrase_agg
-    GROUP BY 1, 2
+    GROUP BY 1, 2, 3, 4, 5
 )
 
 -- 8. Final Join (Daily Data + Global Tooltip)
@@ -224,6 +230,9 @@ FROM phrase_stats p
 -- Join the global stats on Campaign + Word
 LEFT JOIN global_tooltip_map g
     ON p.event_edition = g.event_edition
+    AND p.platform = g.platform
+    AND p.campaign_id = g.campaign_id
+    AND p.cut_off_rate = g.cut_off_rate
     AND p.word = g.word
 
 GROUP BY
