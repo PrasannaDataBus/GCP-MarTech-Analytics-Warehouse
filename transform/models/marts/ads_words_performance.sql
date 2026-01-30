@@ -94,9 +94,25 @@ combined_data AS (
     SELECT * FROM meta_source
 ),
 
--- 4. Tokenization Engine (The Logic Layer)
+-- 4. Tokenization Engine (Explode Words)
 tokenized AS (
     SELECT
+        *,
+        -- Logic: Clean, Lowercase, Split, Unnest
+        -- Output column is named 'word'
+        token as word
+    FROM combined_data,
+    -- Internal alias is named 'token' to prevent ambiguity
+    UNNEST(SPLIT(REGEXP_REPLACE(LOWER(raw_text), r'[^\w\s]', ''), ' ')) as token
+    WHERE LENGTH(token) > 2
+      AND token NOT IN ('the', 'and', 'for', 'with', 'from', 'that', 'this', 'your', 'are')
+),
+
+-- 5. NEW STEP: Pre-Aggregate Phrases (Deduplication Layer)
+-- This ensures "Ad Copy A" is only listed ONCE per word, with total stats.
+phrase_stats AS (
+    SELECT
+        -- Grouping Dimensions
         date,
         platform,
         account_name,
@@ -116,9 +132,6 @@ tokenized AS (
 
         currency,
 
-        -- Pass the full phrase through for the Tooltip
-        raw_text,
-
         -- CLEANING & SPLITTING:
         -- 1. LOWER(): Normalize case (Monaco = monaco)
         -- 2. REGEXP_REPLACE(): Remove symbols (e.g., "Wow!" -> "Wow")
@@ -126,14 +139,21 @@ tokenized AS (
         -- 4. UNNEST(): Turn Array into Rows
         word,
 
-        cost,
-        clicks,
-        impressions,
-        conversions,
-        conversion_value
+        -- The Phrase itself (Truncated to 100 chars for readability)
+        CASE
+            WHEN LENGTH(raw_text) > 100 THEN CONCAT(LEFT(raw_text, 100), '...')
+            ELSE raw_text
+        END as clean_phrase,
 
-    FROM combined_data,
-    UNNEST(SPLIT(REGEXP_REPLACE(LOWER(raw_text), r'[^\w\s]', ''), ' ')) as word
+        -- Aggregated Stats for this specific phrase
+        SUM(cost) as phrase_cost,
+        SUM(impressions) as phrase_impressions,
+        SUM(clicks) as phrase_clicks,
+        SUM(conversions) as phrase_conversions,
+        SUM(conversion_value) as phrase_conversion_value
+
+    FROM tokenized
+    GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17
 )
 
 -- 5. Final Aggregation
@@ -165,39 +185,27 @@ SELECT
     -- The Atomic Unit
     word,
 
-    -- NEW COLUMN: Tooltip Context (Top 5 real phrases for this word)
-    -- Creates a string like: "amwc monaco (100) \n amwc tickets (50)"
+    -- PERFECT TOOLTIP:
+    -- Aggregates the unique, pre-summed phrases. No duplicates.
     ARRAY_TO_STRING(
         ARRAY_AGG(
-            CONCAT(raw_text, ' (', impressions, ')')
-            ORDER BY impressions DESC LIMIT 5
+            CONCAT(clean_phrase, ' (', phrase_impressions, ')')
+            ORDER BY phrase_impressions DESC LIMIT 5
         ),
         '\n'
     ) as top_search_combinations,
 
-    -- Aggregated Metrics
-    SUM(cost) as cost,
-    SUM(impressions) as impressions,
-    SUM(clicks) as clicks,
-
-    -- Calculated Metrics (Safe Divide)
-    SAFE_DIVIDE(SUM(clicks), SUM(impressions)) as ctr,
-    SAFE_DIVIDE(SUM(cost), SUM(clicks)) as average_cpc,
-
-    SUM(conversions) as conversions,
-    SUM(conversion_value) as conversion_value,
-
+    -- Total Stats for the Word
+    SUM(phrase_cost) as cost,
+    SUM(phrase_impressions) as impressions,
+    SUM(phrase_clicks) as clicks,
+    SAFE_DIVIDE(SUM(phrase_clicks), SUM(phrase_impressions)) as ctr,
+    SAFE_DIVIDE(SUM(phrase_cost), SUM(phrase_clicks)) as average_cpc,
+    SUM(phrase_conversions) as conversions,
+    SUM(phrase_conversion_value) as conversion_value,
     MAX(currency) as currency
 
-FROM tokenized
-
-WHERE
-    -- NOISE FILTER:
-    -- Remove words with 2 or fewer letters (e.g., 'a', 'to', 'in', 'of')
-    LENGTH(word) > 2
-    -- Remove specific stopwords if needed
-    AND word NOT IN ('the', 'and', 'for', 'with', 'from', 'that', 'this', 'your', 'are')
-
+FROM phrase_stats
 GROUP BY
     date,
     platform,
