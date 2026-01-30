@@ -116,6 +116,9 @@ tokenized AS (
 
         currency,
 
+        -- Pass the full phrase through for the Tooltip
+        raw_text,
+
         -- CLEANING & SPLITTING:
         -- 1. LOWER(): Normalize case (Monaco = monaco)
         -- 2. REGEXP_REPLACE(): Remove symbols (e.g., "Wow!" -> "Wow")
@@ -136,7 +139,7 @@ tokenized AS (
 -- 5. Final Aggregation
 SELECT
     -- Unique ID for PBI (Date + Event + Platform + Word)
-    FARM_FINGERPRINT(CONCAT(CAST(date AS STRING), event_edition, platform, word)) as id,
+    FARM_FINGERPRINT(CONCAT(CAST(date AS STRING), event_edition, platform, CAST(campaign_id AS STRING), word)) as id,
 
     date,
     platform,
@@ -161,6 +164,16 @@ SELECT
 
     -- The Atomic Unit
     word,
+
+    -- NEW COLUMN: Tooltip Context (Top 5 real phrases for this word)
+    -- Creates a string like: "amwc monaco (100) \n amwc tickets (50)"
+    ARRAY_TO_STRING(
+        ARRAY_AGG(
+            CONCAT(raw_text, ' (', impressions, ')')
+            ORDER BY impressions DESC LIMIT 5
+        ),
+        '\n'
+    ) as top_search_combinations,
 
     -- Aggregated Metrics
     SUM(cost) as cost,
