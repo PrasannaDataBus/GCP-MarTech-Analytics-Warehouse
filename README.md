@@ -70,7 +70,7 @@ The Google Ads pipeline comprises **18 distinct extraction modules** producing 1
 - **Countdown Logic:** Computes `Weeks Out` metrics (e.g., "Week 10", "Week 0") to enable time-relative performance curves for comparing events performance year-over-year.
 
 
-- **Multi-Currency Normalization:** Converts cost metrics from local currencies (GBP, EUR, etc.) into a unified **USD** baseline for consistent financial reporting.
+- **Local Currency Preservation:** Maintains original currency and cost metrics as reported by the source API (GBP, EUR, USD, etc.) to ensure 100% financial alignment with the platform UI.
 
 **Cost Saving (Slim CI):** In the Development Environment, I use Jinja Macros ({% if target.name == 'dev' %}) to limit processing to the last 14 days. This reduces cloud compute costs by >90% during testing.
 
