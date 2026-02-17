@@ -126,8 +126,7 @@ meta_ads AS (
         account_name,
         campaign_id,
         campaign_name,
-        -- Meta implies status is active if it's spending, passing NULL to match schema
-        CAST(NULL AS STRING) as campaign_status,
+        campaign_status,
         ad_group_name,
         ad_name,
 
