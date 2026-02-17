@@ -104,6 +104,8 @@ SELECT
   campaign_budget.total_amount_micros, -- Total Budget (if set)
   campaign_budget.type,              -- e.g. DAILY or FIXED_CPA
   metrics.cost_micros,               -- Actual Spend
+  metrics.clicks,
+  metrics.impressions,
   metrics.search_budget_lost_impression_share,
   metrics.content_budget_lost_impression_share
 FROM campaign
@@ -175,6 +177,8 @@ def extract_budget_data(customer_id: str, start_date: str, end_date: str, ads_cl
                 "total_budget_micros": row.campaign_budget.total_amount_micros, # Only for lifetime budgets
                 "budget_type": row.campaign_budget.type_.name,
                 "cost_micros": row.metrics.cost_micros,
+                "clicks": row.metrics.clicks,
+                "impressions": row.metrics.impressions,
                 "search_budget_lost_is": row.metrics.search_budget_lost_impression_share,
                 "content_budget_lost_is": row.metrics.content_budget_lost_impression_share,
                 "bidding_strategy_type": getattr(row.campaign.bidding_strategy_type, "name", None),
@@ -231,6 +235,8 @@ def load_to_bigquery(df: pd.DataFrame, start_date: str, end_date: str, account_n
                                             bigquery.SchemaField("total_budget_micros", "INTEGER"),
                                             bigquery.SchemaField("budget_type", "STRING"),
                                             bigquery.SchemaField("cost_micros", "INTEGER"),
+                                            bigquery.SchemaField("clicks", "INTEGER"),
+                                            bigquery.SchemaField("impressions", "INTEGER"),
                                             bigquery.SchemaField("search_budget_lost_is", "FLOAT"),
                                             bigquery.SchemaField("content_budget_lost_is", "FLOAT"),
                                             bigquery.SchemaField("bidding_strategy_type", "STRING"),
@@ -337,7 +343,26 @@ if __name__ == "__main__":
 #     if "date" in df.columns:
 #         df["date"] = pd.to_datetime(df["date"], errors = "coerce").dt.date
 #
+#     # Determine Date Range to Clear
+#     min_date = df["date"].min()
+#     max_date = df["date"].max()
+#     account_id = df["account_id"].iloc[0]  # Get ID from first row
+#
 #     table_id = f"{PROJECT_ID}.{RAW_DATASET_NAME}.{BUDGET_PACING_TABLE_NAME}"
+#
+#     # DELETE Existing Data for this Range/Account
+#     delete_query = f"""
+#             DELETE FROM `{table_id}`
+#             WHERE date BETWEEN '{min_date}' AND '{max_date}'
+#             AND account_id = '{account_id}'
+#         """
+#
+#     try:
+#         bq_client.query(delete_query).result()
+#         print(f"  -> Cleared overlap for {account_id} between {min_date} and {max_date}")
+#     except Exception as e:
+#         print(f"  -> Warning: Delete failed (Table might not exist yet): {e}")
+#
 #     job_config = bigquery.LoadJobConfig(write_disposition="WRITE_APPEND",
 #                                         schema = [
 #                                             bigquery.SchemaField("date", "DATE"),
@@ -350,6 +375,8 @@ if __name__ == "__main__":
 #                                             bigquery.SchemaField("total_budget_micros", "INTEGER"),
 #                                             bigquery.SchemaField("budget_type", "STRING"),
 #                                             bigquery.SchemaField("cost_micros", "INTEGER"),
+#                                             bigquery.SchemaField("clicks", "INTEGER"),
+#                                             bigquery.SchemaField("impressions", "INTEGER"),
 #                                             bigquery.SchemaField("search_budget_lost_is", "FLOAT"),
 #                                             bigquery.SchemaField("content_budget_lost_is", "FLOAT"),
 #                                             bigquery.SchemaField("bidding_strategy_type", "STRING"),
@@ -387,7 +414,7 @@ if __name__ == "__main__":
 #         account_name = account["name"]
 #         print(f"\nExtracting BUDGET PACING DATA for account: {account_name} ({customer_id})")
 #
-#         years = [2025]  # Start with one year test, expand later
+#         years = [2026]  # Start with one year test, expand later
 #         for yr in years:
 #             start_date = f"{yr}-01-01"
 #             end_date = f"{yr}-12-31" if yr < date.today().year else str(date.today())
