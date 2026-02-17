@@ -114,7 +114,8 @@ INSIGHT_FIELDS = [
     'adset_name',
     'spend',
     'impressions',
-    'clicks'
+    'clicks',
+    'unique_clicks',
 ]
 
 
@@ -307,6 +308,7 @@ def extract_budget_pacing_async(account_id: str, account_name: str, start_date: 
                     "spend": float(item.get('spend', 0.0)),
                     "impressions": int(item.get('impressions', 0)),
                     "clicks": int(item.get('clicks', 0)),
+                    "unique_clicks": int(item.get('unique_clicks', 0)),
 
                     # Budget Caps (Merged)
                     "daily_budget_cap": config.get('daily_budget', 0.0),
@@ -381,6 +383,7 @@ def load_to_bigquery(df: pd.DataFrame, start_date: str, end_date: str, account_i
             bigquery.SchemaField("spend", "FLOAT"),
             bigquery.SchemaField("impressions", "INTEGER"),
             bigquery.SchemaField("clicks", "INTEGER"),
+            bigquery.SchemaField("unique_clicks", "INTEGER"),
 
             # Pacing Fields
             bigquery.SchemaField("daily_budget_cap", "FLOAT"),
