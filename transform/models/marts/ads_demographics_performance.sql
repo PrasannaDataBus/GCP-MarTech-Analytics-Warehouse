@@ -34,6 +34,7 @@ WITH google_ads AS (
         account_name,
         campaign_id,
         campaign_name,
+        campaign_status,
 
         -- Demographics
         age_group,
@@ -49,7 +50,9 @@ WITH google_ads AS (
         average_cpc,
         impressions,
         clicks,
+        unique_clicks,
         ctr,
+        unique_ctr,
         conversions,
         conversion_value,
         currency
@@ -82,6 +85,7 @@ meta_ads AS (
         account_name,
         campaign_id,
         campaign_name,
+        campaign_status,
 
         -- Demographics
         age_group,
@@ -97,7 +101,9 @@ meta_ads AS (
         average_cpc,
         impressions,
         clicks,
+        unique_clicks,
         ctr,
+        unique_ctr,
         conversions,
         conversion_value,
         currency
