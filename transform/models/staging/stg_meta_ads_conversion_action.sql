@@ -136,6 +136,7 @@ renamed AS (
 
         CAST(campaign_id AS STRING) as campaign_id,
         campaign_name,
+        campaign_status,
 
         CAST(adset_id AS STRING) as ad_group_id,
         adset_name as ad_group_name,
@@ -256,10 +257,21 @@ logic_layer AS (
 )
 
 SELECT
-    id, date, account_id, account_name, event_name,
-    campaign_id, campaign_name, ad_group_id, ad_group_name, ad_id, ad_name,
+    id,
+    date,
+    account_id,
+    account_name,
+    event_name,
+    campaign_id,
+    campaign_name,
+    campaign_status,
+    ad_group_id,
+    ad_group_name,
+    ad_id,
+    ad_name,
     conversion_action,
-    conversions, conversion_value,
+    conversions,
+    conversion_value,
     currency,
 
     event_edition,
