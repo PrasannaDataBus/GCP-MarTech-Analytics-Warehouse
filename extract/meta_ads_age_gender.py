@@ -106,8 +106,10 @@ FIELDS = [
     'ad_name',
     'impressions',
     'clicks',
+    'unique_clicks',
     'spend',
     'ctr',
+    'unique_ctr',
     'actions',      # Conversions
     'action_values' # Revenue
 ]
@@ -119,6 +121,22 @@ FIELDS = [
 def get_bq_client():
     """Safe BQ Client initialization"""
     return bigquery.Client()
+
+
+# ---------------------------------------------------------
+# HELPER: Get Campaign Status Map
+# ---------------------------------------------------------
+def get_campaign_statuses(account):
+    """Fetches all campaigns for the account to build a status lookup map."""
+    print("  -> Fetching Campaign Status Map...")
+    try:
+        campaigns = account.get_campaigns(fields=['id', 'effective_status'], params={'limit': 10000})
+        status_map = {c['id']: c['effective_status'] for c in campaigns}
+        print(f"  -> Cached status for {len(status_map)} campaigns.")
+        return status_map
+    except Exception as e:
+        print(f"  -> Warning: Could not fetch campaign statuses: {e}")
+        return {}
 
 
 # --- HELPER: Date Chunks (The Fix for Timeouts) ---
@@ -160,6 +178,9 @@ def extract_age_gender_data(account_id: str, account_name: str, start_date: str,
     formatted_id = account_id if account_id.startswith('act_') else f"act_{account_id}"
     account = AdAccount(formatted_id)
 
+    # Fetch Campaign Status
+    campaign_status_map = get_campaign_statuses(account)
+
     all_data_rows = []
 
     # Loop through 30-day chunks
@@ -182,6 +203,9 @@ def extract_age_gender_data(account_id: str, account_name: str, start_date: str,
 
             # --- Processing Loop ---
             for item in insights:
+                camp_id = item.get('campaign_id')
+                status = campaign_status_map.get(camp_id, 'Unknown')
+
                 total_conversions = 0.0
                 total_conversion_value = 0.0
 
@@ -199,6 +223,7 @@ def extract_age_gender_data(account_id: str, account_name: str, start_date: str,
                     "account_name": item['account_name'],
                     "campaign_id": item['campaign_id'],
                     "campaign_name": item['campaign_name'],
+                    "campaign_status": status,
                     "adset_id": item['adset_id'],
                     "adset_name": item['adset_name'],
                     "ad_id": item['ad_id'],
@@ -210,8 +235,10 @@ def extract_age_gender_data(account_id: str, account_name: str, start_date: str,
 
                     "impressions": int(item.get('impressions', 0)),
                     "clicks": int(item.get('clicks', 0)),
+                    "unique_clicks": int(item.get('unique_clicks', 0)),
                     "spend": float(item.get('spend', 0.0)),
                     "ctr": float(item.get('ctr', 0.0)),
+                    "unique_ctr": float(item.get('unique_ctr', 0.0)),
                     "average_cpc": float(item.get('cpc', 0.0)),
                     "cpm": float(item.get('cpm', 0.0)),
                     "reach": int(item.get('reach', 0)),
@@ -278,6 +305,7 @@ def load_to_bigquery(df: pd.DataFrame, start_date: str, end_date: str, account_i
             bigquery.SchemaField("account_name", "STRING"),
             bigquery.SchemaField("campaign_id", "STRING"),
             bigquery.SchemaField("campaign_name", "STRING"),
+            bigquery.SchemaField("campaign_status", "STRING"),
             bigquery.SchemaField("adset_id", "STRING"),
             bigquery.SchemaField("adset_name", "STRING"),
             bigquery.SchemaField("ad_id", "STRING"),
@@ -289,8 +317,10 @@ def load_to_bigquery(df: pd.DataFrame, start_date: str, end_date: str, account_i
 
             bigquery.SchemaField("impressions", "INTEGER"),
             bigquery.SchemaField("clicks", "INTEGER"),
+            bigquery.SchemaField("unique_clicks", "INTEGER"),
             bigquery.SchemaField("spend", "FLOAT"),
             bigquery.SchemaField("ctr", "FLOAT"),
+            bigquery.SchemaField("unique_ctr", "FLOAT"),
             bigquery.SchemaField("average_cpc", "FLOAT"),
             bigquery.SchemaField("cpm", "FLOAT"),
             bigquery.SchemaField("reach", "INTEGER"),
@@ -396,7 +426,7 @@ def main():
     # Today = 25/11/2025 minus 37 months = 10/2022 - so I skip 3 months in 2022 and I am starting the extraction from 2023
     # ==============================================================================
 
-    # years = [2025]  # Define years to backfill
+    # years = [2026]  # Define years to backfill
     #
     # for acc in accounts:
     #     acc_id = acc['id']
