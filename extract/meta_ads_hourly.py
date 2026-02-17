@@ -107,8 +107,10 @@ FIELDS = [
     'ad_name',
     'impressions',
     'clicks',
+    'unique_clicks',
     'spend',
     'ctr',
+    'unique_ctr',
     'actions',      # Conversions
     'action_values' # Revenue
 ]
@@ -247,8 +249,10 @@ def extract_hourly_data(account_id: str, account_name: str, start_date: str, end
                     "hour_of_day": hour_int,  # Integer 0-23
                     "impressions": int(item.get('impressions', 0)),
                     "clicks": int(item.get('clicks', 0)),
+                    "unique_clicks": int(item.get('unique_clicks', 0)),
                     "spend": float(item.get('spend', 0.0)),
                     "ctr": float(item.get('ctr', 0.0)),
+                    "unique_ctr": float(item.get('unique_ctr', 0.0)),
                     "average_cpc": float(item.get('cpc', 0.0)),
                     "cpm": float(item.get('cpm', 0.0)),
                     "conversions": total_conv,
@@ -411,8 +415,10 @@ def load_to_bigquery(df: pd.DataFrame, start_date: str, end_date: str, account_i
 
             bigquery.SchemaField("impressions", "INTEGER"),
             bigquery.SchemaField("clicks", "INTEGER"),
+            bigquery.SchemaField("unique_clicks", "INTEGER"),
             bigquery.SchemaField("spend", "FLOAT"),
             bigquery.SchemaField("ctr", "FLOAT"),
+            bigquery.SchemaField("unique_ctr", "FLOAT"),
             bigquery.SchemaField("average_cpc", "FLOAT"),
             bigquery.SchemaField("cpm", "FLOAT"),
 
