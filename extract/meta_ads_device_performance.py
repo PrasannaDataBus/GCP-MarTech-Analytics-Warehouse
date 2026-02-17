@@ -122,6 +122,22 @@ def get_bq_client():
     return bigquery.Client()
 
 
+# ---------------------------------------------------------
+# HELPER: Get Campaign Status Map
+# ---------------------------------------------------------
+def get_campaign_statuses(account):
+    """Fetches all campaigns for the account to build a status lookup map."""
+    print("  -> Fetching Campaign Status Map...")
+    try:
+        campaigns = account.get_campaigns(fields=['id', 'effective_status'], params={'limit': 10000})
+        status_map = {c['id']: c['effective_status'] for c in campaigns}
+        print(f"  -> Cached status for {len(status_map)} campaigns.")
+        return status_map
+    except Exception as e:
+        print(f"  -> Warning: Could not fetch campaign statuses: {e}")
+        return {}
+
+
 # --- HELPER: Date Chunks (The Fix for Timeouts) ---
 def get_date_chunks(start_date, end_date, chunk_size=30):
     """Splits a date range into smaller chunks to avoid API timeouts."""
@@ -160,6 +176,8 @@ def extract_device_performance_data(account_id: str, account_name: str, start_da
     # Ensure 'act_' prefix
     formatted_id = account_id if account_id.startswith('act_') else f"act_{account_id}"
     account = AdAccount(formatted_id)
+
+    campaign_status_map = get_campaign_statuses(account)
 
     all_data_rows = []
 
@@ -201,6 +219,9 @@ def extract_device_performance_data(account_id: str, account_name: str, start_da
             result_cursor = job.get_result()
 
             for item in result_cursor:
+                camp_id = item['campaign_id']
+                camp_status = campaign_status_map.get(camp_id, 'UNKNOWN')
+
                 # Calculate Conversions
                 total_conv = sum(float(x['value']) for x in item.get('actions', []))
                 total_val = sum(float(x['value']) for x in item.get('action_values', []))
@@ -211,6 +232,7 @@ def extract_device_performance_data(account_id: str, account_name: str, start_da
                     "account_name": item['account_name'],
                     "campaign_id": item['campaign_id'],
                     "campaign_name": item['campaign_name'],
+                    "campaign_status": camp_status,
                     "adset_id": item['adset_id'],
                     "adset_name": item['adset_name'],
                     "ad_id": item['ad_id'],
@@ -290,6 +312,7 @@ def load_to_bigquery(df: pd.DataFrame, start_date: str, end_date: str, account_i
             bigquery.SchemaField("account_name", "STRING"),
             bigquery.SchemaField("campaign_id", "STRING"),
             bigquery.SchemaField("campaign_name", "STRING"),
+            bigquery.SchemaField("campaign_status", "STRING"),
             bigquery.SchemaField("adset_id", "STRING"),
             bigquery.SchemaField("adset_name", "STRING"),
             bigquery.SchemaField("ad_id", "STRING"),
@@ -373,7 +396,7 @@ def main():
     # Today = 25/11/2025 minus 37 months = 10/2022 - so I skip 3 months in 2022 and I am starting the extraction from 2023
     # ==============================================================================
 
-    # years = [2025]
+    # years = [2026]
     #
     # for acc in accounts:
     #     acc_id = acc['id']
