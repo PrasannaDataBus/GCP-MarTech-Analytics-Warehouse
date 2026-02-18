@@ -45,9 +45,11 @@ WITH google_ads AS (
         cost,
         impressions,
         clicks,
+        unique_clicks,
         conversions,
         conversion_value,
         ctr,
+        unique_ctr,
         average_cpc,
 
         -- 6. Google Specific Metrics
@@ -91,7 +93,7 @@ meta_ads AS (
         account_id,
         account_name,
         campaign_name,
-        CAST(NULL AS STRING) as campaign_status, -- Meta usually has no status in this report
+        campaign_status,
         ad_group_id,
         ad_group_name,
         ad_id,
@@ -105,9 +107,11 @@ meta_ads AS (
         cost,
         impressions,
         clicks,
+        unique_clicks,
         conversions,
         conversion_value,
         ctr,
+        unique_ctr,
         average_cpc,
 
         -- 6. Google Specific Metrics (Fill with NULLs)

@@ -70,7 +70,9 @@ renamed AS (
         -- 5. Performance
         SAFE_CAST(impressions AS INT64) as impressions,
         SAFE_CAST(clicks AS INT64) as clicks,
+        SAFE_CAST(clicks AS INT64) as unique_clicks,
         SAFE_CAST(ctr AS FLOAT64) as ctr,
+        SAFE_CAST(ctr AS FLOAT64) as unique_ctr,
 
         -- REMOVED: conversions/values (Not in raw data)
         -- Only specific metrics available:
@@ -181,7 +183,9 @@ SELECT
 
     impressions,
     clicks,
+    unique_clicks,
     ctr,
+    unique_ctr,
 
     -- Conversions missing in Google Raw, passing NULLs or alternate metrics
     -- If you want standard conversions to be 0/NULL for now to match schema:

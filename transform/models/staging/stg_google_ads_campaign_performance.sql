@@ -58,7 +58,9 @@ renamed AS (
         (SAFE_CAST(cost_micros AS FLOAT64) / 1000000) as cost,
         SAFE_CAST(impressions AS INT64) as impressions,
         SAFE_CAST(clicks AS INT64) as clicks,
+        SAFE_CAST(clicks AS INT64) as unique_clicks,
         SAFE_CAST(ctr AS FLOAT64) as ctr,
+        SAFE_CAST(ctr AS FLOAT64) as unique_ctr,
 
         -- Context
         bidding_strategy_type,
@@ -180,7 +182,9 @@ SELECT
     cost,
     impressions,
     clicks,
+    unique_clicks,
     ctr,
+    unique_ctr,
     bidding_strategy_type,
     currency,
     event_edition,
