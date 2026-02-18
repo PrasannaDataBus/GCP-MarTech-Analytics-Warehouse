@@ -47,9 +47,11 @@ WITH google_campaigns AS (
         cost,
         impressions,
         clicks,
+        unique_clicks,
 
         -- Calculated Metrics
         ctr,
+        unique_ctr,
         SAFE_DIVIDE(cost, clicks) as average_cpc,
 
         currency
@@ -84,9 +86,7 @@ meta_campaigns AS (
         MAX(account_name) as account_name,
         campaign_id,
         MAX(campaign_name) as campaign_name,
-
-        -- Meta Staging doesn't have status, passing NULL
-        CAST(NULL AS STRING) as campaign_status,
+        MAX(campaign_status) as campaign_status,
 
         -- Pricing / Rate Context
         MAX(cut_off_rate) as cut_off_rate,
@@ -100,9 +100,11 @@ meta_campaigns AS (
         SUM(cost) as cost,
         SUM(impressions) as impressions,
         SUM(clicks) as clicks,
+        SUM(unique_clicks) as unique_clicks,
 
         -- Re-Calculate Rates for the Aggregated Row
         SAFE_DIVIDE(SUM(clicks), SUM(impressions)) as ctr,
+        SAFE_DIVIDE(SUM(unique_clicks), SUM(impressions)) as unique_ctr,
         SAFE_DIVIDE(SUM(cost), SUM(clicks)) as average_cpc,
 
         MAX(currency) as currency
