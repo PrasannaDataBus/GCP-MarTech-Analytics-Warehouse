@@ -41,6 +41,7 @@ google_ads AS (
         account_name,
         campaign_id,
         campaign_name,
+        campaign_status,
 
         -- Pricing / Rate Context
         cut_off_rate,                     -- e.g. "EB", "FP"
@@ -56,9 +57,11 @@ google_ads AS (
         cost,
         impressions,
         clicks,
+        unique_clicks,
         conversions,
         conversion_value,
         ctr,
+        unique_ctr,
         average_cpc,
         currency
 
@@ -90,6 +93,7 @@ meta_ads AS (
         account_name,
         campaign_id,
         campaign_name,
+        campaign_status,
 
         -- Pricing / Rate Context
         cut_off_rate,
@@ -105,9 +109,11 @@ meta_ads AS (
         cost,
         impressions,
         clicks,
+        unique_clicks,
         conversions,
         conversion_value,
         ctr,
+        unique_ctr,
         average_cpc,
         currency
 
