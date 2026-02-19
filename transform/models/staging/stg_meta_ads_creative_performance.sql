@@ -149,6 +149,7 @@ renamed AS (
 
         CAST(perf.campaign_id AS STRING) as campaign_id,
         perf.campaign_name,
+        perf.campaign_status,
 
         CAST(perf.adset_id AS STRING) as ad_group_id,
         perf.adset_name as ad_group_name,
@@ -171,7 +172,9 @@ renamed AS (
         -- 5. Performance
         SAFE_CAST(perf.impressions AS INT64) as impressions,
         SAFE_CAST(perf.clicks AS INT64) as clicks,
+        SAFE_CAST(perf.unique_clicks AS INT64) as unique_clicks,
         SAFE_CAST(perf.ctr AS FLOAT64) as ctr,
+        SAFE_CAST(perf.unique_ctr AS FLOAT64) as unique_ctr,
         SAFE_CAST(perf.conversions AS FLOAT64) as conversions,
         SAFE_CAST(perf.conversion_value AS FLOAT64) as conversion_value,
         SAFE_CAST(perf.reach AS INT64) as reach,
@@ -295,6 +298,7 @@ SELECT
     event_name,
     campaign_id,
     campaign_name,
+    campaign_status,
     ad_group_id,
     ad_group_name,
     ad_id,
@@ -312,7 +316,9 @@ SELECT
     cpm,
     impressions,
     clicks,
+    unique_clicks,
     ctr,
+    unique_ctr,
     conversions,
     conversion_value,
     reach,

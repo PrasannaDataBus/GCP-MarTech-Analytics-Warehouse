@@ -48,6 +48,7 @@ renamed AS (
 
         CAST(st.campaign_id AS STRING) as campaign_id,
         st.campaign_name,
+        st.campaign_status,
 
         CAST(st.ad_group_id AS STRING) as ad_group_id,
         st.ad_group_name,
@@ -63,6 +64,7 @@ renamed AS (
         (SAFE_CAST(st.cost_micros AS FLOAT64) / 1000000) as cost,
         SAFE_CAST(st.impressions AS INT64) as impressions,
         SAFE_CAST(st.clicks AS INT64) as clicks,
+        SAFE_CAST(st.clicks AS INT64) as unique_clicks,
         SAFE_CAST(st.conversions AS FLOAT64) as conversions,
         SAFE_CAST(st.conversions_value AS FLOAT64) as conversion_value, -- Added for value tracking
 
@@ -172,6 +174,7 @@ SELECT
     event_name,
     campaign_id,
     campaign_name,
+    campaign_status,
     ad_group_id,
     ad_group_name,
 
@@ -182,9 +185,11 @@ SELECT
     cost,
     impressions,
     clicks,
+    unique_clicks,
 
     -- CTR Calculation (Safe Divide)
     SAFE_DIVIDE(clicks, impressions) as ctr,
+    SAFE_DIVIDE(clicks, impressions) as unique_ctr,
 
     conversions,
     conversion_value,

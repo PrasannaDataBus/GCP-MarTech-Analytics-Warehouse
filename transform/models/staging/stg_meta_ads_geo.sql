@@ -130,6 +130,7 @@ renamed AS (
 
         CAST(campaign_id AS STRING) as campaign_id,
         campaign_name,
+        campaign_status,
 
         -- 4. Geography Dimensions
         region as region_name,
@@ -146,7 +147,9 @@ renamed AS (
         SAFE_CAST(average_cpc AS FLOAT64) as average_cpc,
         SAFE_CAST(impressions AS INT64) as impressions,
         SAFE_CAST(clicks AS INT64) as clicks,
+        SAFE_CAST(unique_clicks AS INT64) as unique_clicks,
         SAFE_CAST(ctr AS FLOAT64) as ctr,
+        SAFE_CAST(unique_ctr AS FLOAT64) as unique_ctr,
         SAFE_CAST(conversions AS FLOAT64) as conversions,
         SAFE_CAST(conversion_value AS FLOAT64) as conversion_value,
         currency
@@ -233,6 +236,7 @@ SELECT
     event_name,
     campaign_id,
     campaign_name,
+    campaign_status,
 
     -- Geo Dimensions
     region_name,
@@ -245,7 +249,9 @@ SELECT
     average_cpc,
     impressions,
     clicks,
+    unique_clicks,
     ctr,
+    unique_ctr,
     conversions,
     conversion_value,
     currency,
