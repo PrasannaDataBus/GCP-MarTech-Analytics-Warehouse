@@ -18,6 +18,7 @@ google_source AS (
         account_name,
         account_id,
         campaign_name,
+        campaign_status,
         campaign_id,
         event_name,
         event_edition,
@@ -38,6 +39,7 @@ google_source AS (
         -- Metrics
         cost,
         clicks,
+        unique_clicks,
         impressions,
         conversions,
         conversion_value,
@@ -55,6 +57,7 @@ meta_source AS (
         account_name,
         account_id,
         campaign_name,
+        campaign_status,
         campaign_id,
         event_name,
         event_edition,
@@ -79,6 +82,7 @@ meta_source AS (
         -- Metrics
         cost,
         clicks,
+        unique_clicks,
         impressions,
         conversions,
         conversion_value,
@@ -118,6 +122,7 @@ phrase_stats AS (
         account_name,
         account_id,
         campaign_name,
+        campaign_status,
         campaign_id,
         event_name,
         event_edition,
@@ -149,11 +154,12 @@ phrase_stats AS (
         SUM(cost) as phrase_cost,
         SUM(impressions) as phrase_impressions,
         SUM(clicks) as phrase_clicks,
+        SUM(unique_clicks) as phrase_unique_clicks,
         SUM(conversions) as phrase_conversions,
         SUM(conversion_value) as phrase_conversion_value
 
     FROM tokenized
-    GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17
+    GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18
 ),
 
 -- 6. Global Stats (Ignore Date to get Grand Totals)
@@ -162,13 +168,14 @@ global_phrase_agg AS (
         event_edition,
         platform,
         campaign_id,
+        campaign_status,
         cut_off_rate,
         word,
         clean_phrase,
         -- Summing across ALL dates
         SUM(phrase_impressions) as total_global_impressions
     FROM phrase_stats
-    GROUP BY 1, 2, 3, 4, 5, 6
+    GROUP BY 1, 2, 3, 4, 5, 6, 7
 ),
 
 -- 7. Build the Global Tooltip String
@@ -177,6 +184,7 @@ global_tooltip_map AS (
         event_edition,
         platform,
         campaign_id,
+        campaign_status,
         cut_off_rate,
         word,
         -- Create the list based on TOTAL volume, not daily
@@ -188,7 +196,7 @@ global_tooltip_map AS (
             '\n'
         ) as global_top_combinations
     FROM global_phrase_agg
-    GROUP BY 1, 2, 3, 4, 5
+    GROUP BY 1, 2, 3, 4, 5, 6
 )
 
 -- 8. Final Join (Daily Data + Global Tooltip)
@@ -204,6 +212,7 @@ SELECT
     p.event_name,
     p.campaign_id,
     p.campaign_name,
+    p.campaign_status,
     p.week_display,
     p.week_number,
     p.week_number_to_sort,
@@ -220,7 +229,9 @@ SELECT
     SUM(p.phrase_cost) as cost,
     SUM(p.phrase_impressions) as impressions,
     SUM(p.phrase_clicks) as clicks,
+    SUM(p.phrase_unique_clicks) as unique_clicks,
     SAFE_DIVIDE(SUM(p.phrase_clicks), SUM(p.phrase_impressions)) as ctr,
+    SAFE_DIVIDE(SUM(p.phrase_unique_clicks), SUM(p.phrase_impressions)) as unique_ctr,
     SAFE_DIVIDE(SUM(p.phrase_cost), SUM(p.phrase_clicks)) as average_cpc,
     SUM(p.phrase_conversions) as conversions,
     SUM(p.phrase_conversion_value) as conversion_value,
@@ -232,6 +243,7 @@ LEFT JOIN global_tooltip_map g
     ON p.event_edition = g.event_edition
     AND p.platform = g.platform
     AND p.campaign_id = g.campaign_id
+    AND p.campaign_status = g.campaign_status
     AND p.cut_off_rate = g.cut_off_rate
     AND p.word = g.word
 
@@ -242,6 +254,7 @@ GROUP BY
     p.event_name,
     p.campaign_id,
     p.campaign_name,
+    p.campaign_status,
     p.week_display,
     p.week_number,
     p.week_number_to_sort,
