@@ -91,6 +91,10 @@ sources:
         description: "Performance by Campaign"
         loaded_at_field: date
 
+      - name: google_ads_geo_pmax_raw
+        description: "PMAX Performance by Geographic Location."
+        loaded_at_field: date
+
       # =========================================================
       # META ADS (9 Tables)
       # =========================================================
