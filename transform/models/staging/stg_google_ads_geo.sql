@@ -3,12 +3,43 @@
     tags=['silver', 'google', 'daily', 'geo']
 ) }}
 
-WITH source AS (
-    SELECT * FROM {{ source('marketing_raw', 'google_ads_user_location_raw') }}
+WITH source_standard AS (
+    SELECT
+        date,
+        account_id,
+        account_name,
+        campaign_id,
+        campaign_name,
+        campaign_status,
+        CAST(ad_group_id AS STRING) AS ad_group_id,
+        CAST(ad_group_name AS STRING) AS ad_group_name,
+        CAST(user_geo_criterion_id AS STRING) AS user_geo_criterion_id,
+        CAST(NULL AS STRING) AS geo_criterion_id, -- Placeholder to match PMAX
+        cost_micros,
+        average_cpc,
+        impressions,
+        clicks,
+        ctr,
+        conversions,
+        conversions_value,
+        view_through_conversions,
+        all_conversions,
+        bidding_strategy_type,
+        currency,
+        _ingested_at
+
+    FROM {{ source('marketing_raw', 'google_ads_user_location_raw') }}
+
+    WHERE 1=1 -- This ensures the 'AND' below doesn't break syntax
+
+      AND campaign_id NOT IN (
+        SELECT DISTINCT campaign_id
+        FROM {{ source('marketing_raw', 'google_ads_geo_pmax_raw') }}
+    )
 
     -- COST SAVER: Runs only in Dev.
     {% if target.name == 'dev' %}
-    WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY)
+    AND date >= DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY)
     {% endif %}
 
     -- DEDUPLICATION: Removes duplicate raw rows
@@ -16,6 +47,54 @@ WITH source AS (
         PARTITION BY date, campaign_id, ad_group_id, user_geo_criterion_id
         ORDER BY _ingested_at DESC
     ) = 1
+),
+
+source_pmax AS (
+    -- This pulls from your dedicated PMAX script table
+    SELECT
+        date,
+        account_id,
+        account_name,
+        campaign_id,
+        campaign_name,
+        campaign_status,
+        CAST(NULL AS STRING) AS ad_group_id, -- PMAX has no Ad Groups
+        CAST(NULL AS STRING) AS ad_group_name,
+        CAST(NULL AS STRING) AS user_geo_criterion_id, -- Placeholder to match Standard
+        CAST(geo_criterion_id AS STRING) AS geo_criterion_id,
+        cost_micros,
+        average_cpc,
+        impressions,
+        clicks,
+        ctr,
+        conversions,
+        conversions_value,
+        view_through_conversions,
+        all_conversions,
+        bidding_strategy_type,
+        currency,
+        _ingested_at
+    FROM {{ source('marketing_raw', 'google_ads_geo_pmax_raw') }}
+
+    WHERE 1=1 -- This ensures the 'AND' below doesn't break syntax
+
+    -- COST SAVER: Runs only in Dev.
+    {% if target.name == 'dev' %}
+    AND date >= DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY)
+    {% endif %}
+
+    -- DEDUPLICATION: Removes duplicate raw rows
+    QUALIFY ROW_NUMBER() OVER(
+        PARTITION BY date, campaign_id, geo_criterion_id
+        ORDER BY _ingested_at DESC
+    ) = 1
+),
+
+-- Combine them before the heavy transformations
+combined_source AS (
+    SELECT * FROM source_standard
+    UNION ALL
+    SELECT * FROM source_pmax
 ),
 
 geo_names AS (
@@ -33,8 +112,8 @@ renamed AS (
         FARM_FINGERPRINT(CONCAT(
             CAST(s.date AS STRING),
             CAST(s.campaign_id AS STRING),
-            CAST(s.ad_group_id AS STRING),
-            CAST(s.user_geo_criterion_id AS STRING)
+            COALESCE(CAST(s.ad_group_id AS STRING), 'PMAX_ONLY'),
+            COALESCE(CAST(s.user_geo_criterion_id AS STRING), CAST(s.geo_criterion_id AS STRING))
         )) as id,
 
         -- 2. Standardize Date
@@ -54,8 +133,8 @@ renamed AS (
         CAST(s.campaign_id AS STRING) as campaign_id,
         s.campaign_name,
         s.campaign_status,
-        CAST(s.ad_group_id AS STRING) as ad_group_id,
-        s.ad_group_name,
+        COALESCE(CAST(s.ad_group_id AS STRING), 'N/A') as ad_group_id,
+        COALESCE(s.ad_group_name, 'Performance Max') as ad_group_name,
 
         -- 3. Geography Dimensions
         COALESCE(g.Name, 'Unknown') as region_name,
@@ -80,9 +159,9 @@ renamed AS (
         s.bidding_strategy_type,
         s.currency
 
-    FROM source s
+    FROM combined_source s
     LEFT JOIN geo_names g
-        ON CAST(s.user_geo_criterion_id AS STRING) = CAST(g.`Criteria ID` AS STRING)
+        ON CAST(COALESCE(s.user_geo_criterion_id, s.geo_criterion_id) AS STRING) = CAST(g.`Criteria ID` AS STRING)
 ),
 
 -- 5. Join Logic (Connect to Calendar)
