@@ -67,6 +67,7 @@ renamed AS (
               OR UPPER(perf.campaign_name) LIKE '%MCS%'
               OR UPPER(perf.campaign_name) LIKE '%AMERICAS%'
               OR UPPER(perf.campaign_name) LIKE '%AMWC NA%'
+              OR UPPER(campaign_name) LIKE '%AMWCNA%'
               OR UPPER(perf.campaign_name) LIKE '%NORTH AMERICA%'
               OR UPPER(perf.campaign_name) LIKE '%NORTHAMERICA%'
               OR UPPER(perf.campaign_name) LIKE '%AMWCNORTHAMERICA%'
@@ -84,6 +85,7 @@ renamed AS (
               OR UPPER(perf.campaign_name) LIKE '%GCC%'
               OR UPPER(perf.campaign_name) LIKE '%UAE%'
               OR UPPER(perf.campaign_name) LIKE '%MIDDLE-EAST%'
+              OR UPPER(campaign_name) LIKE '%AMWCUAE%'
               THEN 'AMWC Dubai'
 
             WHEN UPPER(perf.campaign_name) LIKE '%BANGKOK%'
@@ -93,6 +95,7 @@ renamed AS (
               OR UPPER(perf.campaign_name) LIKE '%AMWC SOUTH%'
               OR UPPER(perf.campaign_name) LIKE '%SOUTHEAST ASIA%'
               OR UPPER(perf.campaign_name) LIKE '%SOUTHEASTASIA%'
+              OR UPPER(campaign_name) LIKE '%AMWCSEA%'
               THEN 'AMWC SEA - ICAD'
 
             WHEN UPPER(perf.campaign_name) LIKE '%LATAM%'
@@ -137,11 +140,13 @@ renamed AS (
             WHEN UPPER(perf.campaign_name) LIKE '%MONACO%'
               OR UPPER(perf.campaign_name) LIKE '%MONTE CARLO%'
               OR UPPER(perf.campaign_name) LIKE '%AMWC%'
+              OR UPPER(campaign_name) LIKE '%AMWCMC%'
               THEN 'AMWC Monaco'
 
             WHEN UPPER(perf.campaign_name) LIKE '%IM AESTHETICS%'
               OR UPPER(perf.campaign_name) LIKE '%IMAESTHETICS%'
               OR UPPER(perf.campaign_name) LIKE '%IM-AESTHETICS%'
+              OR UPPER(campaign_name) LIKE '%IMA%'
               THEN 'IM AESTHETICS'
 
             ELSE 'Other/Unmapped'
