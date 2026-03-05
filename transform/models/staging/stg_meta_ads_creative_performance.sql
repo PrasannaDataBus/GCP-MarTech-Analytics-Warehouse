@@ -19,6 +19,21 @@ WITH performance_source AS (
     ) = 1
 ),
 
+-- Load New Campaign Dimensions (Schedules & Status)
+campaign_dims AS (
+    SELECT
+        CAST(campaign_id AS STRING) as dim_campaign_id,
+        effective_status,
+        start_time,
+        stop_time
+    FROM {{ source('marketing_raw', 'meta_ads_campaign_dim') }}
+    -- Ensure we only grab the latest state per campaign
+    QUALIFY ROW_NUMBER() OVER(
+        PARTITION BY campaign_id
+        ORDER BY _ingested_at DESC
+    ) = 1
+),
+
 -- BRIDGE TABLE: Required to link Performance (Ad ID) -> Creative (Creative ID)
 ad_dim_bridge AS (
     SELECT DISTINCT
@@ -154,7 +169,18 @@ renamed AS (
 
         CAST(perf.campaign_id AS STRING) as campaign_id,
         perf.campaign_name,
-        perf.campaign_status,
+
+        -- UI DELIVERY STATUS CALCULATION (Replaces raw status)
+        CASE
+            -- If the campaign has an end date and it is in the past, it is Completed
+            WHEN dim.stop_time IS NOT NULL AND EXTRACT(DATE FROM dim.stop_time) < CURRENT_DATE() THEN 'Completed'
+            -- If it was manually turned off, it is Off
+            WHEN dim.effective_status = 'PAUSED' THEN 'Off'
+            -- If it is actively running, it is Active
+            WHEN dim.effective_status = 'ACTIVE' THEN 'Active'
+            -- Fallback for pending, deleted, etc.
+            ELSE COALESCE(INITCAP(dim.effective_status), 'Not delivering')
+        END as campaign_status,
 
         CAST(perf.adset_id AS STRING) as ad_group_id,
         perf.adset_name as ad_group_name,
@@ -193,6 +219,8 @@ renamed AS (
         ON CAST(perf.ad_id AS STRING) = bridge.ad_id
     LEFT JOIN creative_dim cre
         ON bridge.creative_id = cre.creative_id
+    LEFT JOIN campaign_dims dim
+        ON CAST(perf.campaign_id AS STRING) = dim.dim_campaign_id
 ),
 
 -- 2. Join Logic (Calendar)
