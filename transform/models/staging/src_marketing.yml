@@ -9,7 +9,7 @@ sources:
 
     tables:
       # =========================================================
-      # GOOGLE ADS (19 Tables)
+      # GOOGLE ADS (21 Tables)
       # =========================================================
 
       # --- Financials & Performance ---
@@ -96,7 +96,7 @@ sources:
         loaded_at_field: date
 
       # =========================================================
-      # META ADS (9 Tables)
+      # META ADS (10 Tables)
       # =========================================================
 
       # --- Financials & Performance ---
@@ -118,6 +118,9 @@ sources:
 
       - name: meta_ads_creative_dim
         description: "Creative details (Image URL, Body, Title, CTA)."
+
+      - name: meta_ads_campaign_dim
+        description: "Campaign details (Start date time, End Data Time, Status)."
 
       # --- Segments (Breakdowns) ---
       - name: meta_ads_age_gender_raw
