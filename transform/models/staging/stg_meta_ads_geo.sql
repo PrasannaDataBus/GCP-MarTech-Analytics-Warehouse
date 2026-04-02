@@ -18,6 +18,21 @@ WITH source AS (
     ) = 1
 ),
 
+-- Load New Campaign Dimensions (Schedules & Status)
+campaign_dims AS (
+    SELECT
+        CAST(campaign_id AS STRING) as dim_campaign_id,
+        effective_status,
+        start_time,
+        stop_time
+    FROM {{ source('marketing_raw', 'meta_ads_campaign_dim') }}
+    -- Ensure we only grab the latest state per campaign
+    QUALIFY ROW_NUMBER() OVER(
+        PARTITION BY campaign_id
+        ORDER BY _ingested_at DESC
+    ) = 1
+),
+
 -- 1. Load Calendar
 calendar AS (
     SELECT * FROM {{ ref('stg_global_events_calendar') }}
@@ -27,139 +42,152 @@ renamed AS (
     SELECT
         -- 1. Generate Unique ID
         FARM_FINGERPRINT(CONCAT(
-            CAST(date AS STRING),
-            CAST(campaign_id AS STRING),
-            CAST(country AS STRING),
-            CAST(region AS STRING)
+            CAST(source.date AS STRING),
+            CAST(source.campaign_id AS STRING),
+            CAST(source.country AS STRING),
+            CAST(source.region AS STRING)
         )) as id,
 
         -- 2. Standardize Date
-        CAST(date AS DATE) as date,
-        CAST(account_id AS STRING) as account_id,
-        account_name,
+        CAST(source.date AS DATE) as date,
+        CAST(source.account_id AS STRING) as account_id,
+        source.account_name,
 
         -- EVENT MATCHING LOGIC (Updated to match Google Logic)
         CASE
             -- 1. AMWC REGIONALS
-            WHEN UPPER(campaign_name) LIKE '%MIAMI%'
-              OR UPPER(campaign_name) LIKE '%MCS%'
-              OR UPPER(campaign_name) LIKE '%AMERICAS%'
-              OR UPPER(campaign_name) LIKE '%AMWC NA%'
-              OR UPPER(campaign_name) LIKE '%AMWCNA%'
-              OR UPPER(campaign_name) LIKE '%NORTH AMERICA%'
-              OR UPPER(campaign_name) LIKE '%NORTHAMERICA%'
-              OR UPPER(campaign_name) LIKE '%AMWCNORTHAMERICA%'
-              OR UPPER(campaign_name) LIKE '%AMWC NORTH AMERICA%'
+            WHEN UPPER(source.campaign_name) LIKE '%MIAMI%'
+              OR UPPER(source.campaign_name) LIKE '%MCS%'
+              OR UPPER(source.campaign_name) LIKE '%AMERICAS%'
+              OR UPPER(source.campaign_name) LIKE '%AMWC NA%'
+              OR UPPER(source.campaign_name) LIKE '%AMWCNA%'
+              OR UPPER(source.campaign_name) LIKE '%NORTH AMERICA%'
+              OR UPPER(source.campaign_name) LIKE '%NORTHAMERICA%'
+              OR UPPER(source.campaign_name) LIKE '%AMWCNORTHAMERICA%'
+              OR UPPER(source.campaign_name) LIKE '%AMWC NORTH AMERICA%'
               THEN 'AMWC Americas'
 
-            WHEN UPPER(campaign_name) LIKE '%TAIPEI%'
-              OR UPPER(campaign_name) LIKE '%TAIWAN%'
-              OR UPPER(campaign_name) LIKE '%TDAC%'
-              OR UPPER(campaign_name) LIKE '%AMWC ASIA%'
-              OR UPPER(campaign_name) LIKE '%AMWCASIA%'
+            WHEN UPPER(source.campaign_name) LIKE '%TAIPEI%'
+              OR UPPER(source.campaign_name) LIKE '%TAIWAN%'
+              OR UPPER(source.campaign_name) LIKE '%TDAC%'
+              OR UPPER(source.campaign_name) LIKE '%AMWC ASIA%'
+              OR UPPER(source.campaign_name) LIKE '%AMWCASIA%'
               THEN 'AMWC Asia-TDAC'
 
-            WHEN UPPER(campaign_name) LIKE '%DUBAI%'
-              OR UPPER(campaign_name) LIKE '%GCC%'
-              OR UPPER(campaign_name) LIKE '%UAE%'
-              OR UPPER(campaign_name) LIKE '%MIDDLE-EAST%'
-              OR UPPER(campaign_name) LIKE '%AMWCUAE%'
+            WHEN UPPER(source.campaign_name) LIKE '%DUBAI%'
+              OR UPPER(source.campaign_name) LIKE '%GCC%'
+              OR UPPER(source.campaign_name) LIKE '%UAE%'
+              OR UPPER(source.campaign_name) LIKE '%MIDDLE-EAST%'
+              OR UPPER(source.campaign_name) LIKE '%AMWCUAE%'
               THEN 'AMWC Dubai'
 
-            WHEN UPPER(campaign_name) LIKE '%BANGKOK%'
-              OR UPPER(campaign_name) LIKE '%THAILAND%'
-              OR UPPER(campaign_name) LIKE '%ICAD%'
-              OR UPPER(campaign_name) LIKE '%SEA%'
-              OR UPPER(campaign_name) LIKE '%AMWC SOUTH%'
-              OR UPPER(campaign_name) LIKE '%SOUTHEAST ASIA%'
-              OR UPPER(campaign_name) LIKE '%SOUTHEASTASIA%'
-              OR UPPER(campaign_name) LIKE '%AMWCSEA%'
+            WHEN UPPER(source.campaign_name) LIKE '%BANGKOK%'
+              OR UPPER(source.campaign_name) LIKE '%THAILAND%'
+              OR UPPER(source.campaign_name) LIKE '%ICAD%'
+              OR UPPER(source.campaign_name) LIKE '%SEA%'
+              OR UPPER(source.campaign_name) LIKE '%AMWC SOUTH%'
+              OR UPPER(source.campaign_name) LIKE '%SOUTHEAST ASIA%'
+              OR UPPER(source.campaign_name) LIKE '%SOUTHEASTASIA%'
+              OR UPPER(source.campaign_name) LIKE '%AMWCSEA%'
               THEN 'AMWC SEA - ICAD'
 
-            WHEN UPPER(campaign_name) LIKE '%LATAM%'
-              OR UPPER(campaign_name) LIKE '%AMWCLATAM%'
-              OR UPPER(campaign_name) LIKE '%AMWC-LATAM%'
-              OR UPPER(campaign_name) LIKE '%AMWC LATAM%'
-              OR UPPER(campaign_name) LIKE '%AMWC LATIN AMERICA%'
-              OR UPPER(campaign_name) LIKE '%LATIN AMERICA%'
-              OR UPPER(campaign_name) LIKE '%AMWC MEDELLIN%'
+            WHEN UPPER(source.campaign_name) LIKE '%LATAM%'
+              OR UPPER(source.campaign_name) LIKE '%AMWCLATAM%'
+              OR UPPER(source.campaign_name) LIKE '%AMWC-LATAM%'
+              OR UPPER(source.campaign_name) LIKE '%AMWC LATAM%'
+              OR UPPER(source.campaign_name) LIKE '%AMWC LATIN AMERICA%'
+              OR UPPER(source.campaign_name) LIKE '%LATIN AMERICA%'
+              OR UPPER(source.campaign_name) LIKE '%AMWC MEDELLIN%'
               THEN 'AMWC LATAM'
 
             -- 2. SPECIFIC CONFERENCES
             -- UPDATED: Maps to 'TAS UK' explicitly (previously mapped to FACE)
-            WHEN UPPER(campaign_name) LIKE '%TAS UK%'
-              OR UPPER(campaign_name) LIKE '%TASUK%'
-              OR UPPER(campaign_name) LIKE '%TAS-UK%'
-              OR UPPER(campaign_name) LIKE '%THE AESTHETIC SHOW UK%'
+            WHEN UPPER(source.campaign_name) LIKE '%TAS UK%'
+              OR UPPER(source.campaign_name) LIKE '%TASUK%'
+              OR UPPER(source.campaign_name) LIKE '%TAS-UK%'
+              OR UPPER(source.campaign_name) LIKE '%THE AESTHETIC SHOW UK%'
               THEN 'TAS UK'
 
-            WHEN UPPER(campaign_name) LIKE '%FACE%'
-              OR UPPER(campaign_name) LIKE '%FACIAL AESTHETIC%'
+            WHEN UPPER(source.campaign_name) LIKE '%FACE%'
+              OR UPPER(source.campaign_name) LIKE '%FACIAL AESTHETIC%'
               THEN 'FACE Conference'
 
             -- Check Generic TAS after TAS UK
-            WHEN UPPER(campaign_name) LIKE '%TAS%'
-              OR UPPER(campaign_name) LIKE '%THE AESTHETIC SHOW%'
+            WHEN UPPER(source.campaign_name) LIKE '%TAS%'
+              OR UPPER(source.campaign_name) LIKE '%THE AESTHETIC SHOW%'
               THEN 'TAS'
 
-            WHEN UPPER(campaign_name) LIKE '%VCS%'
-              OR UPPER(campaign_name) LIKE '%VEGAS COSMETIC SURGERY%'
+            WHEN UPPER(source.campaign_name) LIKE '%VCS%'
+              OR UPPER(source.campaign_name) LIKE '%VEGAS COSMETIC SURGERY%'
               THEN 'VCS'
 
-            WHEN UPPER(campaign_name) LIKE '%EUROGIN%'
-              OR UPPER(campaign_name) LIKE '%HPV%'
-              OR UPPER(campaign_name) LIKE '%GYN%'
-              OR UPPER(campaign_name) LIKE '%PAPILLOMA%'
+            WHEN UPPER(source.campaign_name) LIKE '%EUROGIN%'
+              OR UPPER(source.campaign_name) LIKE '%HPV%'
+              OR UPPER(source.campaign_name) LIKE '%GYN%'
+              OR UPPER(source.campaign_name) LIKE '%PAPILLOMA%'
               THEN 'EUROGIN'
 
-            WHEN UPPER(campaign_name) LIKE '%AMS%'
-              OR UPPER(campaign_name) LIKE '%AESTHETIC MULTISPECIALITY SOCIETY%'
+            WHEN UPPER(source.campaign_name) LIKE '%AMS%'
+              OR UPPER(source.campaign_name) LIKE '%AESTHETIC MULTISPECIALITY SOCIETY%'
               THEN 'AMS'
 
             -- 3. GENERIC AMWC (The Monaco Event)
             -- UPDATED: Renamed to 'AMWC Monaco'
-            WHEN UPPER(campaign_name) LIKE '%MONACO%'
-              OR UPPER(campaign_name) LIKE '%MONTE CARLO%'
-              OR UPPER(campaign_name) LIKE '%AMWC%'
-              OR UPPER(campaign_name) LIKE '%AMWCMC%'
+            WHEN UPPER(source.campaign_name) LIKE '%MONACO%'
+              OR UPPER(source.campaign_name) LIKE '%MONTE CARLO%'
+              OR UPPER(source.campaign_name) LIKE '%AMWC%'
+              OR UPPER(source.campaign_name) LIKE '%AMWCMC%'
               THEN 'AMWC Monaco'
 
-            WHEN UPPER(campaign_name) LIKE '%IM AESTHETICS%'
-              OR UPPER(campaign_name) LIKE '%IMAESTHETICS%'
-              OR UPPER(campaign_name) LIKE '%IM-AESTHETICS%'
-              OR UPPER(campaign_name) LIKE '%IMA%'
+            WHEN UPPER(source.campaign_name) LIKE '%IM AESTHETICS%'
+              OR UPPER(source.campaign_name) LIKE '%IMAESTHETICS%'
+              OR UPPER(source.campaign_name) LIKE '%IM-AESTHETICS%'
+              OR UPPER(source.campaign_name) LIKE '%IMA%'
               THEN 'IM AESTHETICS'
 
             ELSE 'Other/Unmapped'
         END as event_name,
 
-        CAST(campaign_id AS STRING) as campaign_id,
-        campaign_name,
-        campaign_status,
+        CAST(source.campaign_id AS STRING) as campaign_id,
+        source.campaign_name,
+
+        -- UI DELIVERY STATUS CALCULATION (Replaces raw status)
+        CASE
+            -- If the campaign has an end date and it is in the past, it is Completed
+            WHEN dim.stop_time IS NOT NULL AND EXTRACT(DATE FROM dim.stop_time) < CURRENT_DATE() THEN 'Completed'
+            -- If it was manually turned off, it is Off
+            WHEN dim.effective_status = 'PAUSED' THEN 'Off'
+            -- If it is actively running, it is Active
+            WHEN dim.effective_status = 'ACTIVE' THEN 'Active'
+            -- Fallback for pending, deleted, etc.
+            ELSE COALESCE(INITCAP(dim.effective_status), 'Not delivering')
+        END as campaign_status,
 
         -- 4. Geography Dimensions
-        region as region_name,
+        source.region as region_name,
         -- Generate canonical name to match Google format
-        CONCAT(region, ', ', country) as canonical_name,
-        country as country_code,
+        CONCAT(source.region, ', ', source.country) as canonical_name,
+        source.country as country_code,
         CASE
-            WHEN region IS NULL OR region = '' THEN 'Country'
+            WHEN source.region IS NULL OR source.region = '' THEN 'Country'
             ELSE 'Region'
         END as geo_target_type,
 
         -- 5. Metrics
-        SAFE_CAST(spend AS FLOAT64) as cost,
-        SAFE_CAST(average_cpc AS FLOAT64) as average_cpc,
-        SAFE_CAST(impressions AS INT64) as impressions,
-        SAFE_CAST(clicks AS INT64) as clicks,
-        SAFE_CAST(unique_clicks AS INT64) as unique_clicks,
-        SAFE_CAST(ctr AS FLOAT64) as ctr,
-        SAFE_CAST(unique_ctr AS FLOAT64) as unique_ctr,
-        SAFE_CAST(conversions AS FLOAT64) as conversions,
-        SAFE_CAST(conversion_value AS FLOAT64) as conversion_value,
-        currency
+        SAFE_CAST(source.spend AS FLOAT64) as cost,
+        SAFE_CAST(source.average_cpc AS FLOAT64) as average_cpc,
+        SAFE_CAST(source.impressions AS INT64) as impressions,
+        SAFE_CAST(source.clicks AS INT64) as clicks,
+        SAFE_CAST(source.unique_clicks AS INT64) as unique_clicks,
+        SAFE_CAST(source.ctr AS FLOAT64) as ctr,
+        SAFE_CAST(source.unique_ctr AS FLOAT64) as unique_ctr,
+        SAFE_CAST(source.conversions AS FLOAT64) as conversions,
+        SAFE_CAST(source.conversion_value AS FLOAT64) as conversion_value,
+        source.currency
 
     FROM source
+    LEFT JOIN campaign_dims dim
+        ON CAST(source.campaign_id AS STRING) = dim.dim_campaign_id
 ),
 
 -- 2. Join Logic (Connect to Calendar)
