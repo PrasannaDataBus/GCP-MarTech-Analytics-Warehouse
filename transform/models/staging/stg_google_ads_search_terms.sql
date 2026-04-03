@@ -20,6 +20,22 @@ WITH search_terms_source AS (
     ) = 1
 ),
 
+-- Load Campaign Dimensions (Schedules & Status)
+campaign_dims AS (
+    SELECT
+        CAST(campaign_id AS STRING) as dim_campaign_id,
+        status,
+        serving_status,
+        start_date,
+        end_date
+    FROM {{ source('marketing_raw', 'google_ads_campaign_dim') }}
+    -- Ensure we only grab the latest state per campaign
+    QUALIFY ROW_NUMBER() OVER(
+        PARTITION BY campaign_id
+        ORDER BY _ingested_at DESC
+    ) = 1
+),
+
 -- 1. Load Calendar
 calendar AS (
     SELECT * FROM {{ ref('stg_global_events_calendar') }}
@@ -72,6 +88,8 @@ renamed AS (
         st.currency
 
     FROM search_terms_source st
+    LEFT JOIN campaign_dims dim
+        ON CAST(st.campaign_id AS STRING) = dim.dim_campaign_id
 ),
 
 -- 2. Join Logic (Find the Edition)
