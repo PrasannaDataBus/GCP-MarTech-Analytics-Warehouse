@@ -173,21 +173,25 @@ def extract_campaign_dimensions(customer_id: str, ads_client):
     return df
 
 
-# --- LOAD TO BIGQUERY (Idempotent Overwrite per Account) ---
-def load_to_bigquery(df: pd.DataFrame, account_name: str, account_id: str, bq_client):
+# --- BATCH LOAD TO BIGQUERY ---
+def load_batch_to_bigquery(df: pd.DataFrame, bq_client):
     table_id = f"{PROJECT_ID}.{RAW_DATASET_NAME}.{CAMPAIGN_DIM_TABLE_NAME}"
 
-    # Delete overlapping date range to ensure no duplicates
+    # 1. Get unique account IDs that were successfully extracted in this run
+    account_ids = df['account_id'].unique().tolist()
+    formatted_ids = ",".join([f"'{aid}'" for aid in account_ids])
+
+    # 2. Delete existing records for ONLY the successful accounts (One query instead of many)
     delete_query = f"""
-        DELETE FROM `{table_id}` WHERE account_id = '{account_id}'
+        DELETE FROM `{table_id}` WHERE account_id IN ({formatted_ids})
     """
     try:
         bq_client.query(delete_query).result()
-        print(f"  -> Cleared existing dimensions for {account_name} ({account_id})")
-    except Exception:
-        pass  # Table might not exist yet on first run
+        print(f"  -> Successfully cleared existing dimensions for {len(account_ids)} accounts in one batch.")
+    except Exception as e:
+        print(f"  -> Note: Delete step skipped or encountered an issue (normal on first run). Error: {e}")
 
-    # 2. Append fresh state
+    # 3. Append fresh state for all accounts at once
     job_config = bigquery.LoadJobConfig(
         write_disposition = "WRITE_APPEND",
         schema = [
@@ -205,11 +209,12 @@ def load_to_bigquery(df: pd.DataFrame, account_name: str, account_id: str, bq_cl
 
     job = bq_client.load_table_from_dataframe(df, table_id, job_config = job_config)
     job.result()
-    print(f"  -> Loaded {len(df)} campaigns into {CAMPAIGN_DIM_TABLE_NAME}")
+    print(f"  -> Successfully loaded {len(df)} total campaigns into {CAMPAIGN_DIM_TABLE_NAME}!")
 
 
 # --- MAIN ---
 
+# --- MAIN ---
 def main():
     print("--- Starting Google Ads Campaign Dimension Extraction ---")
 
@@ -223,9 +228,9 @@ def main():
         print(f"Error fetching ad accounts: {e}")
         return
 
-    # Using the exact exclusion logic from your performance script
     EXCLUDED_IDS = ['8024672713']
     failed_accounts = []
+    master_df_list = []  # NEW: Initialize an empty list to hold all dataframes
 
     for account in child_accounts:
         customer_id = str(account["id"])
@@ -235,22 +240,33 @@ def main():
             print(f"Skipping known Test Account: {account_name} ({customer_id})")
             continue
 
-        print(f"\nExtracting dimensions for account: {account_name} ({customer_id})")
+        print(f"Extracting dimensions for account: {account_name} ({customer_id})")
 
         try:
             df = extract_campaign_dimensions(customer_id, ads_client)
             if df.empty:
-                print(f"No campaigns found for {account_name}")
+                print(f"  -> No campaigns found.")
                 continue
 
-            load_to_bigquery(df, account_name, customer_id, bq_client)
+            # Add to our master list instead of loading to BQ immediately
+            master_df_list.append(df)
+            print(f"  -> Buffered {len(df)} campaigns in memory.")
+
         except Exception as e:
             error_msg = f"Failed for {account_name} ({customer_id}): {e}"
             print(error_msg)
             failed_accounts.append(error_msg)
 
+    # --- SINGLE BIGQUERY UPLOAD AT THE END ---
+    if master_df_list:
+        print("\n--- Pushing Batch to BigQuery ---")
+        final_df = pd.concat(master_df_list, ignore_index = True)
+        load_batch_to_bigquery(final_df, bq_client)
+    else:
+        print("\n--- No data extracted to load. ---")
+
     if failed_accounts:
-        print("\nCRITICAL: The following accounts failed extraction/loading:")
+        print("\nCRITICAL: The following accounts failed extraction:")
         for err in failed_accounts:
             print(f" - {err}")
         raise Exception(f"Script completed with errors in {len(failed_accounts)} accounts.")
