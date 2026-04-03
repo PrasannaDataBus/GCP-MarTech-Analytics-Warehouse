@@ -35,6 +35,22 @@ gender_source AS (
     ) = 1
 ),
 
+-- Load Campaign Dimensions (Schedules & Status)
+campaign_dims AS (
+    SELECT
+        CAST(campaign_id AS STRING) as dim_campaign_id,
+        status,
+        serving_status,
+        start_date,
+        end_date
+    FROM {{ source('marketing_raw', 'google_ads_campaign_dim') }}
+    -- Ensure we only grab the latest state per campaign
+    QUALIFY ROW_NUMBER() OVER(
+        PARTITION BY campaign_id
+        ORDER BY _ingested_at DESC
+    ) = 1
+),
+
 calendar AS (
     SELECT * FROM {{ ref('stg_global_events_calendar') }}
 ),
@@ -42,76 +58,96 @@ calendar AS (
 -- 1. Standardize Age Data
 google_age AS (
     SELECT
-        FARM_FINGERPRINT(CONCAT(CAST(date AS STRING), CAST(campaign_id AS STRING), CAST(ad_group_id AS STRING), 'age', age_range)) as id,
-        CAST(date AS DATE) as date,
-        CAST(account_id AS STRING) as account_id,
-        account_name,
+        FARM_FINGERPRINT(CONCAT(CAST(age_source.date AS STRING), CAST(age_source.campaign_id AS STRING), CAST(age_source.ad_group_id AS STRING), 'age', age_source.age_range)) as id,
+        CAST(age_source.date AS DATE) as date,
+        CAST(age_source.account_id AS STRING) as account_id,
+        age_source.account_name,
 
         -- EVENT NORMALIZATION (Matches Campaign Logic)
         CASE
-            WHEN account_name = 'Inactive - AMWC Asia' THEN 'AMWC Asia-TDAC'
-            WHEN account_name = 'The Aesthetic Show UK' THEN 'TAS UK'
-            WHEN account_name = 'AMWC Conference' THEN 'AMWC Monaco'
-            WHEN account_name LIKE '%Dubai%' THEN 'AMWC Dubai'
-            ELSE account_name
+            WHEN age_source.account_name = 'Inactive - AMWC Asia' THEN 'AMWC Asia-TDAC'
+            WHEN age_source.account_name = 'The Aesthetic Show UK' THEN 'TAS UK'
+            WHEN age_source.account_name = 'AMWC Conference' THEN 'AMWC Monaco'
+            WHEN age_source.account_name LIKE '%Dubai%' THEN 'AMWC Dubai'
+            ELSE age_source.account_name
         END as event_name,
 
-        CAST(campaign_id AS STRING) as campaign_id,
-        campaign_name,
-        campaign_status,
-        CAST(ad_group_id AS STRING) as ad_group_id,
-        ad_group_name,
+        CAST(age_source.campaign_id AS STRING) as campaign_id,
+        age_source.campaign_name,
+
+        -- UI DELIVERY STATUS CALCULATION
+        CASE
+            WHEN dim.serving_status = 'ENDED' OR (dim.end_date IS NOT NULL AND dim.end_date < CURRENT_DATE()) THEN 'Completed'
+            WHEN dim.status = 'PAUSED' THEN 'Off'
+            WHEN dim.status = 'REMOVED' THEN 'Deleted'
+            WHEN dim.status = 'ENABLED' AND dim.serving_status = 'SERVING' THEN 'Active'
+            ELSE COALESCE(INITCAP(dim.serving_status), INITCAP(dim.status), 'Not delivering')
+        END as campaign_status,
+
+        CAST(age_source.ad_group_id AS STRING) as ad_group_id,
+        age_source.ad_group_name,
 
         -- DEMOGRAPHICS
         CASE
-            WHEN age_range = 'AGE_RANGE_18_24' THEN '18-24'
-            WHEN age_range = 'AGE_RANGE_25_34' THEN '25-34'
-            WHEN age_range = 'AGE_RANGE_35_44' THEN '35-44'
-            WHEN age_range = 'AGE_RANGE_45_54' THEN '45-54'
-            WHEN age_range = 'AGE_RANGE_55_64' THEN '55-64'
-            WHEN age_range = 'AGE_RANGE_65_UP' THEN '65+'
+            WHEN age_source.age_range = 'AGE_RANGE_18_24' THEN '18-24'
+            WHEN age_source.age_range = 'AGE_RANGE_25_34' THEN '25-34'
+            WHEN age_source.age_range = 'AGE_RANGE_35_44' THEN '35-44'
+            WHEN age_source.age_range = 'AGE_RANGE_45_54' THEN '45-54'
+            WHEN age_source.age_range = 'AGE_RANGE_55_64' THEN '55-64'
+            WHEN age_source.age_range = 'AGE_RANGE_65_UP' THEN '65+'
             ELSE 'Unknown'
         END as age_group,
         'Unspecified' as gender,
         'Age Only' as report_granularity,
 
         -- METRICS
-        (SAFE_CAST(cost_micros AS FLOAT64) / 1000000) as cost,
-        SAFE_CAST(average_cpc AS FLOAT64) as average_cpc,
-        SAFE_CAST(impressions AS INT64) as impressions,
-        SAFE_CAST(clicks AS INT64) as clicks,
-        SAFE_CAST(clicks AS INT64) as unique_clicks,
-        SAFE_CAST(ctr AS FLOAT64) as ctr,
-        SAFE_CAST(ctr AS FLOAT64) as unique_ctr,
-        SAFE_CAST(conversions AS FLOAT64) as conversions,
-        SAFE_CAST(conversions_value AS FLOAT64) as conversion_value,
-        currency
+        (SAFE_CAST(age_source.cost_micros AS FLOAT64) / 1000000) as cost,
+        SAFE_CAST(age_source.average_cpc AS FLOAT64) as average_cpc,
+        SAFE_CAST(age_source.impressions AS INT64) as impressions,
+        SAFE_CAST(age_source.clicks AS INT64) as clicks,
+        SAFE_CAST(age_source.clicks AS INT64) as unique_clicks,
+        SAFE_CAST(age_source.ctr AS FLOAT64) as ctr,
+        SAFE_CAST(age_source.ctr AS FLOAT64) as unique_ctr,
+        SAFE_CAST(age_source.conversions AS FLOAT64) as conversions,
+        SAFE_CAST(age_source.conversions_value AS FLOAT64) as conversion_value,
+        age_source.currency
 
     FROM age_source
+    LEFT JOIN campaign_dims dim
+        ON CAST(age_source.campaign_id AS STRING) = dim.dim_campaign_id
 ),
 
 -- 2. Standardize Gender Data
 google_gender AS (
     SELECT
-        FARM_FINGERPRINT(CONCAT(CAST(date AS STRING), CAST(campaign_id AS STRING), CAST(ad_group_id AS STRING), 'gender', gender)) as id,
-        CAST(date AS DATE) as date,
-        CAST(account_id AS STRING) as account_id,
-        account_name,
+        FARM_FINGERPRINT(CONCAT(CAST(gender_source.date AS STRING), CAST(gender_source.campaign_id AS STRING), CAST(gender_source.ad_group_id AS STRING), 'gender', gender_source.gender)) as id,
+        CAST(gender_source.date AS DATE) as date,
+        CAST(gender_source.account_id AS STRING) as account_id,
+        gender_source.account_name,
 
         -- EVENT NORMALIZATION
         CASE
-            WHEN account_name = 'Inactive - AMWC Asia' THEN 'AMWC Asia-TDAC'
-            WHEN account_name = 'The Aesthetic Show UK' THEN 'TAS UK'
-            WHEN account_name = 'AMWC Conference' THEN 'AMWC Monaco'
-            WHEN account_name LIKE '%Dubai%' THEN 'AMWC Dubai'
-            ELSE account_name
+            WHEN gender_source.account_name = 'Inactive - AMWC Asia' THEN 'AMWC Asia-TDAC'
+            WHEN gender_source.account_name = 'The Aesthetic Show UK' THEN 'TAS UK'
+            WHEN gender_source.account_name = 'AMWC Conference' THEN 'AMWC Monaco'
+            WHEN gender_source.account_name LIKE '%Dubai%' THEN 'AMWC Dubai'
+            ELSE gender_source.account_name
         END as event_name,
 
-        CAST(campaign_id AS STRING) as campaign_id,
-        campaign_name,
-        campaign_status,
-        CAST(ad_group_id AS STRING) as ad_group_id,
-        ad_group_name,
+        CAST(gender_source.campaign_id AS STRING) as campaign_id,
+        gender_source.campaign_name,
+
+        -- UI DELIVERY STATUS CALCULATION
+        CASE
+            WHEN dim.serving_status = 'ENDED' OR (dim.end_date IS NOT NULL AND dim.end_date < CURRENT_DATE()) THEN 'Completed'
+            WHEN dim.status = 'PAUSED' THEN 'Off'
+            WHEN dim.status = 'REMOVED' THEN 'Deleted'
+            WHEN dim.status = 'ENABLED' AND dim.serving_status = 'SERVING' THEN 'Active'
+            ELSE COALESCE(INITCAP(dim.serving_status), INITCAP(dim.status), 'Not delivering')
+        END as campaign_status,
+
+        CAST(gender_source.ad_group_id AS STRING) as ad_group_id,
+        gender_source.ad_group_name,
 
         -- DEMOGRAPHICS
         'Unspecified' as age_group,
@@ -119,18 +155,20 @@ google_gender AS (
         'Gender Only' as report_granularity,
 
         -- METRICS
-        (SAFE_CAST(cost_micros AS FLOAT64) / 1000000) as cost,
-        SAFE_CAST(average_cpc AS FLOAT64) as average_cpc,
-        SAFE_CAST(impressions AS INT64) as impressions,
-        SAFE_CAST(clicks AS INT64) as clicks,
-        SAFE_CAST(clicks AS INT64) as unique_clicks,
-        SAFE_CAST(ctr AS FLOAT64) as ctr,
-        SAFE_CAST(ctr AS FLOAT64) as unique_ctr,
-        SAFE_CAST(conversions AS FLOAT64) as conversions,
-        SAFE_CAST(conversions_value AS FLOAT64) as conversion_value,
-        currency
+        (SAFE_CAST(gender_source.cost_micros AS FLOAT64) / 1000000) as cost,
+        SAFE_CAST(gender_source.average_cpc AS FLOAT64) as average_cpc,
+        SAFE_CAST(gender_source.impressions AS INT64) as impressions,
+        SAFE_CAST(gender_source.clicks AS INT64) as clicks,
+        SAFE_CAST(gender_source.clicks AS INT64) as unique_clicks,
+        SAFE_CAST(gender_source.ctr AS FLOAT64) as ctr,
+        SAFE_CAST(gender_source.ctr AS FLOAT64) as unique_ctr,
+        SAFE_CAST(gender_source.conversions AS FLOAT64) as conversions,
+        SAFE_CAST(gender_source.conversions_value AS FLOAT64) as conversion_value,
+        gender_source.currency
 
     FROM gender_source
+    LEFT JOIN campaign_dims dim
+        ON CAST(gender_source.campaign_id AS STRING) = dim.dim_campaign_id
 ),
 
 -- 3. Combine Base Data
