@@ -20,6 +20,22 @@ WITH source AS (
     ) = 1
 ),
 
+-- Load Campaign Dimensions (Schedules & Status)
+campaign_dims AS (
+    SELECT
+        CAST(campaign_id AS STRING) as dim_campaign_id,
+        status,
+        serving_status,
+        start_date,
+        end_date
+    FROM {{ source('marketing_raw', 'google_ads_campaign_dim') }}
+    -- Ensure we only grab the latest state per campaign
+    QUALIFY ROW_NUMBER() OVER(
+        PARTITION BY campaign_id
+        ORDER BY _ingested_at DESC
+    ) = 1
+),
+
 -- 1. Load Calendar (The "Truth" Table)
 calendar AS (
     SELECT * FROM {{ ref('stg_global_events_calendar') }}
@@ -29,65 +45,75 @@ renamed AS (
     SELECT
         -- 1. Generate Unique ID (Ad Level)
         FARM_FINGERPRINT(CONCAT(
-            CAST(date AS STRING),
-            CAST(ad_id AS STRING),
-            IFNULL(device, ''),
-            IFNULL(ad_network_type, '')
+            CAST(source.date AS STRING),
+            CAST(source.ad_id AS STRING),
+            IFNULL(source.device, ''),
+            IFNULL(source.ad_network_type, '')
         )) as id,
 
         -- 2. Standardize Date
-        CAST(date AS DATE) as date,
+        CAST(source.date AS DATE) as date,
 
         -- 3. Dimensions
-        CAST(account_id AS STRING) as account_id,
-        account_name,
+        CAST(source.account_id AS STRING) as account_id,
+        source.account_name,
 
         -- EVENT NAME NORMALIZATION
         -- Matches logic from 'stg_google_ads_campaign_performance'
         CASE
-            WHEN account_name = 'Inactive - AMWC Asia' THEN 'AMWC Asia-TDAC'
-            WHEN account_name = 'The Aesthetic Show UK' THEN 'TAS UK'
-            WHEN account_name = 'AMWC Conference' THEN 'AMWC Monaco'
-            WHEN account_name LIKE '%Dubai%' THEN 'AMWC Dubai'
-            ELSE account_name
+            WHEN source.account_name = 'Inactive - AMWC Asia' THEN 'AMWC Asia-TDAC'
+            WHEN source.account_name = 'The Aesthetic Show UK' THEN 'TAS UK'
+            WHEN source.account_name = 'AMWC Conference' THEN 'AMWC Monaco'
+            WHEN source.account_name LIKE '%Dubai%' THEN 'AMWC Dubai'
+            ELSE source.account_name
         END as event_name,
 
-        CAST(campaign_id AS STRING) as campaign_id,
-        campaign_name,
-        campaign_status,
+        CAST(source.campaign_id AS STRING) as campaign_id,
+        source.campaign_name,
 
-        CAST(ad_group_id AS STRING) as ad_group_id,
-        ad_group_name,
+        -- UI DELIVERY STATUS CALCULATION
+        CASE
+            WHEN dim.serving_status = 'ENDED' OR (dim.end_date IS NOT NULL AND dim.end_date < CURRENT_DATE()) THEN 'Completed'
+            WHEN dim.status = 'PAUSED' THEN 'Off'
+            WHEN dim.status = 'REMOVED' THEN 'Deleted'
+            WHEN dim.status = 'ENABLED' AND dim.serving_status = 'SERVING' THEN 'Active'
+            ELSE COALESCE(INITCAP(dim.serving_status), INITCAP(dim.status), 'Not delivering')
+        END as campaign_status,
 
-        CAST(ad_id AS STRING) as ad_id,
-        ad_name,
-        ad_type,
+        CAST(source.ad_group_id AS STRING) as ad_group_id,
+        source.ad_group_name,
+
+        CAST(source.ad_id AS STRING) as ad_id,
+        source.ad_name,
+        source.ad_type,
 
         -- 4. Financials
-        (SAFE_CAST(cost_micros AS FLOAT64) / 1000000) as cost,
+        (SAFE_CAST(source.cost_micros AS FLOAT64) / 1000000) as cost,
         -- REMOVED: average_cpc (Calculated later)
 
         -- 5. Performance
-        SAFE_CAST(impressions AS INT64) as impressions,
-        SAFE_CAST(clicks AS INT64) as clicks,
-        SAFE_CAST(clicks AS INT64) as unique_clicks,
-        SAFE_CAST(ctr AS FLOAT64) as ctr,
-        SAFE_CAST(ctr AS FLOAT64) as unique_ctr,
+        SAFE_CAST(source.impressions AS INT64) as impressions,
+        SAFE_CAST(source.clicks AS INT64) as clicks,
+        SAFE_CAST(source.clicks AS INT64) as unique_clicks,
+        SAFE_CAST(source.ctr AS FLOAT64) as ctr,
+        SAFE_CAST(source.ctr AS FLOAT64) as unique_ctr,
 
         -- REMOVED: conversions/values (Not in raw data)
         -- Only specific metrics available:
-        SAFE_CAST(view_through_conversions AS FLOAT64) as view_through_conversions,
-        SAFE_CAST(all_conversions AS FLOAT64) as all_conversions,
-        SAFE_CAST(engagements AS INT64) as engagements,
+        SAFE_CAST(source.view_through_conversions AS FLOAT64) as view_through_conversions,
+        SAFE_CAST(source.all_conversions AS FLOAT64) as all_conversions,
+        SAFE_CAST(source.engagements AS INT64) as engagements,
 
-        bidding_strategy_type,
+        source.bidding_strategy_type,
 
         -- 7. Segments
-        device,
-        ad_network_type,
-        currency
+        source.device,
+        source.ad_network_type,
+        source.currency
 
     FROM source
+    LEFT JOIN campaign_dims dim
+        ON CAST(source.campaign_id AS STRING) = dim.dim_campaign_id
 ),
 
 -- 2. Join Logic (Connect Ad Data to Calendar)
