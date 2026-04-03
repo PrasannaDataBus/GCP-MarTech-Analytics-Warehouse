@@ -272,7 +272,7 @@ def main():
     EXCLUDED_IDS = ['8024672713']
 
     last_loaded_date = get_last_loaded_date(bq_client)
-    lookback_days = 45  # configurable window for late updates
+    lookback_days = 30  # configurable window for late updates
     if last_loaded_date:
         start_date = (last_loaded_date - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
     else:
