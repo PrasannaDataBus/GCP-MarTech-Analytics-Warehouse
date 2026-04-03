@@ -20,6 +20,22 @@ WITH source AS (
     ) = 1
 ),
 
+-- Load Campaign Dimensions (Schedules & Status)
+campaign_dims AS (
+    SELECT
+        CAST(campaign_id AS STRING) as dim_campaign_id,
+        status,
+        serving_status,
+        start_date,
+        end_date
+    FROM {{ source('marketing_raw', 'google_ads_campaign_dim') }}
+    -- Ensure we only grab the latest state per campaign
+    QUALIFY ROW_NUMBER() OVER(
+        PARTITION BY campaign_id
+        ORDER BY _ingested_at DESC
+    ) = 1
+),
+
 -- 1. Load Calendar
 calendar AS (
     SELECT * FROM {{ ref('stg_global_events_calendar') }}
@@ -28,44 +44,59 @@ calendar AS (
 renamed AS (
     -- Unique ID (Campaign Level)
     SELECT
-        FARM_FINGERPRINT(CONCAT(CAST(date AS STRING), CAST(campaign_id AS STRING))) as id,
+        FARM_FINGERPRINT(CONCAT(CAST(source.date AS STRING), CAST(source.campaign_id AS STRING))) as id,
 
         -- Date
-        CAST(date AS DATE) as date,
+        CAST(source.date AS DATE) as date,
 
         -- Dimensions
-        CAST(account_id AS STRING) as account_id,
-        account_name,
+        CAST(source.account_id AS STRING) as account_id,
+        source.account_name,
 
         -- Event Name Normalization
         CASE
-            WHEN account_name = 'Inactive - AMWC Asia' THEN 'AMWC Asia-TDAC'
-            WHEN account_name = 'The Aesthetic Show UK' THEN 'TAS UK'
-            WHEN account_name = 'AMWC Conference' THEN 'AMWC Monaco'
-            WHEN account_name LIKE '%Dubai%' THEN 'AMWC Dubai'
+            WHEN source.account_name = 'Inactive - AMWC Asia' THEN 'AMWC Asia-TDAC'
+            WHEN source.account_name = 'The Aesthetic Show UK' THEN 'TAS UK'
+            WHEN source.account_name = 'AMWC Conference' THEN 'AMWC Monaco'
+            WHEN source.account_name LIKE '%Dubai%' THEN 'AMWC Dubai'
 
-            ELSE account_name
+            ELSE source.account_name
         END as event_name,
 
-        CAST(campaign_id AS STRING) as campaign_id,
-        campaign_name,
-        campaign_status,
+        CAST(source.campaign_id AS STRING) as campaign_id,
+        source.campaign_name,
+
+        -- UI DELIVERY STATUS CALCULATION (Unifies Google Ads with Meta logic)
+        CASE
+            -- If Google officially marks it as Ended, or the end date is past
+            WHEN dim.serving_status = 'ENDED' OR (dim.end_date IS NOT NULL AND dim.end_date < CURRENT_DATE()) THEN 'Completed'
+            -- If it was manually turned off
+            WHEN dim.status = 'PAUSED' THEN 'Off'
+            -- If it was deleted
+            WHEN dim.status = 'REMOVED' THEN 'Deleted'
+            -- If it is actively running
+            WHEN dim.status = 'ENABLED' AND dim.serving_status = 'SERVING' THEN 'Active'
+            -- Fallback to whatever serving state it is in (e.g., Pending, Suspended)
+            ELSE COALESCE(INITCAP(dim.serving_status), INITCAP(dim.status), 'Not delivering')
+        END as campaign_status,
 
         -- NEW: This distinguishes PMax from Search
-        advertising_channel_type as channel_type,
+        source.advertising_channel_type as channel_type,
 
         -- Metrics
-        (SAFE_CAST(cost_micros AS FLOAT64) / 1000000) as cost,
-        SAFE_CAST(impressions AS INT64) as impressions,
-        SAFE_CAST(clicks AS INT64) as clicks,
-        SAFE_CAST(clicks AS INT64) as unique_clicks,
-        SAFE_CAST(ctr AS FLOAT64) as ctr,
-        SAFE_CAST(ctr AS FLOAT64) as unique_ctr,
+        (SAFE_CAST(source.cost_micros AS FLOAT64) / 1000000) as cost,
+        SAFE_CAST(source.impressions AS INT64) as impressions,
+        SAFE_CAST(source.clicks AS INT64) as clicks,
+        SAFE_CAST(source.clicks AS INT64) as unique_clicks,
+        SAFE_CAST(source.ctr AS FLOAT64) as ctr,
+        SAFE_CAST(source.ctr AS FLOAT64) as unique_ctr,
 
         -- Context
-        bidding_strategy_type,
-        currency
+        source.bidding_strategy_type,
+        source.currency
     FROM source
+    LEFT JOIN campaign_dims dim
+        ON CAST(source.campaign_id AS STRING) = dim.dim_campaign_id
 ),
 
 -- 2. Join Logic (Find the Edition)
