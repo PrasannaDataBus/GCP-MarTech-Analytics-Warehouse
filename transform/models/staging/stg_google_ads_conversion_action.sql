@@ -19,6 +19,22 @@ WITH source AS (
     ) = 1
 ),
 
+-- Load Campaign Dimensions (Schedules & Status)
+campaign_dims AS (
+    SELECT
+        CAST(campaign_id AS STRING) as dim_campaign_id,
+        status,
+        serving_status,
+        start_date,
+        end_date
+    FROM {{ source('marketing_raw', 'google_ads_campaign_dim') }}
+    -- Ensure we only grab the latest state per campaign
+    QUALIFY ROW_NUMBER() OVER(
+        PARTITION BY campaign_id
+        ORDER BY _ingested_at DESC
+    ) = 1
+),
+
 -- 1. Load Calendar (The "Truth" Table)
 calendar AS (
     SELECT * FROM {{ ref('stg_global_events_calendar') }}
@@ -28,49 +44,64 @@ renamed AS (
     SELECT
         -- 1. Generate Unique ID
         -- Note: Google Conversion Raw is at CAMPAIGN level, not Ad level.
-        FARM_FINGERPRINT(CONCAT(CAST(date AS STRING), CAST(campaign_id AS STRING), CAST(conversion_action_id AS STRING))) as id,
+        FARM_FINGERPRINT(CONCAT(CAST(source.date AS STRING), CAST(source.campaign_id AS STRING), CAST(source.conversion_action_id AS STRING))) as id,
 
         -- 2. Standardize Date
-        CAST(date AS DATE) as date,
-        EXTRACT(YEAR FROM CAST(date AS DATE)) as year,
-        EXTRACT(MONTH FROM CAST(date AS DATE)) as month,
-        EXTRACT(DAY FROM CAST(date AS DATE)) as day,
+        CAST(source.date AS DATE) as date,
+        EXTRACT(YEAR FROM CAST(source.date AS DATE)) as year,
+        EXTRACT(MONTH FROM CAST(source.date AS DATE)) as month,
+        EXTRACT(DAY FROM CAST(source.date AS DATE)) as day,
 
         -- 3. Dimensions
-        CAST(account_id AS STRING) as account_id,
-        account_name,
+        CAST(source.account_id AS STRING) as account_id,
+        source.account_name,
 
         -- EVENT NAME NORMALIZATION (Matches Campaign Performance Logic)
         -- Ensures consistency for joins and Power BI slicers
         CASE
-            WHEN account_name = 'Inactive - AMWC Asia' THEN 'AMWC Asia-TDAC'
-            WHEN account_name = 'The Aesthetic Show UK' THEN 'TAS UK'
-            WHEN account_name = 'AMWC Conference' THEN 'AMWC Monaco'
-            WHEN account_name LIKE '%Dubai%' THEN 'AMWC Dubai'
+            WHEN source.account_name = 'Inactive - AMWC Asia' THEN 'AMWC Asia-TDAC'
+            WHEN source.account_name = 'The Aesthetic Show UK' THEN 'TAS UK'
+            WHEN source.account_name = 'AMWC Conference' THEN 'AMWC Monaco'
+            WHEN source.account_name LIKE '%Dubai%' THEN 'AMWC Dubai'
 
-            ELSE account_name
+            ELSE source.account_name
         END as event_name,
 
-        CAST(campaign_id AS STRING) as campaign_id,
-        campaign_name,
-        campaign_status,
+        CAST(source.campaign_id AS STRING) as campaign_id,
+        source.campaign_name,
+
+        -- UI DELIVERY STATUS CALCULATION (Unifies Google Ads with Meta logic)
+        CASE
+            -- If Google officially marks it as Ended, or the end date is past
+            WHEN dim.serving_status = 'ENDED' OR (dim.end_date IS NOT NULL AND dim.end_date < CURRENT_DATE()) THEN 'Completed'
+            -- If it was manually turned off
+            WHEN dim.status = 'PAUSED' THEN 'Off'
+            -- If it was deleted
+            WHEN dim.status = 'REMOVED' THEN 'Deleted'
+            -- If it is actively running
+            WHEN dim.status = 'ENABLED' AND dim.serving_status = 'SERVING' THEN 'Active'
+            -- Fallback to whatever serving state it is in (e.g., Pending, Suspended)
+            ELSE COALESCE(INITCAP(dim.serving_status), INITCAP(dim.status), 'Not delivering')
+        END as campaign_status,
 
         -- 4. Conversion Specific Dimensions
-        CAST(conversion_action_id AS STRING) as conversion_action_id,
-        conversion_action_name,
-        conversion_category, -- CRITICAL: Use this to filter 'PURCHASE' vs 'LEAD'
+        CAST(source.conversion_action_id AS STRING) as conversion_action_id,
+        source.conversion_action_name,
+        source.conversion_category, -- CRITICAL: Use this to filter 'PURCHASE' vs 'LEAD'
 
         -- 5. Metrics
-        SAFE_CAST(conversions AS FLOAT64) as conversions,
-        SAFE_CAST(conversions_value AS FLOAT64) as conversion_value,
-        SAFE_CAST(all_conversions AS FLOAT64) as all_conversions,
-        SAFE_CAST(all_conversions_value AS FLOAT64) as all_conversions_value,
+        SAFE_CAST(source.conversions AS FLOAT64) as conversions,
+        SAFE_CAST(source.conversions_value AS FLOAT64) as conversion_value,
+        SAFE_CAST(source.all_conversions AS FLOAT64) as all_conversions,
+        SAFE_CAST(source.all_conversions_value AS FLOAT64) as all_conversions_value,
 
         -- 6. Context
-        bidding_strategy_type,
-        currency
+        source.bidding_strategy_type,
+        source.currency
 
     FROM source
+    LEFT JOIN campaign_dims dim
+        ON CAST(source.campaign_id AS STRING) = dim.dim_campaign_id
 ),
 
 -- 2. Join Logic (Find the Edition)

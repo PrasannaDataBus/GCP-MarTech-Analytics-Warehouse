@@ -41,6 +41,9 @@ sources:
       - name: google_ads_pmax_asset_dim
         description: "Performance Max asset metadata (Images, Text)."
 
+      - name: google_ads_campaign_dim
+        description: "Ad Status (Active, Pause, Ended, Deleted....)"
+
       # --- Context (Raw Performance) ---
       - name: google_ads_keyword_raw
         description: "Daily performance stats per Keyword."
