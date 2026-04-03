@@ -101,6 +101,22 @@ geo_names AS (
     SELECT * FROM {{ source('marketing_raw', 'google_ads_geo_dim') }}
 ),
 
+-- Load Campaign Dimensions (Schedules & Status)
+campaign_dims AS (
+    SELECT
+        CAST(campaign_id AS STRING) as dim_campaign_id,
+        status,
+        serving_status,
+        start_date,
+        end_date
+    FROM {{ source('marketing_raw', 'google_ads_campaign_dim') }}
+    -- Ensure we only grab the latest state per campaign
+    QUALIFY ROW_NUMBER() OVER(
+        PARTITION BY campaign_id
+        ORDER BY _ingested_at DESC
+    ) = 1
+),
+
 -- 1. Load Calendar
 calendar AS (
     SELECT * FROM {{ ref('stg_global_events_calendar') }}
@@ -132,7 +148,16 @@ renamed AS (
 
         CAST(s.campaign_id AS STRING) as campaign_id,
         s.campaign_name,
-        s.campaign_status,
+
+        -- UI DELIVERY STATUS CALCULATION
+        CASE
+            WHEN dim.serving_status = 'ENDED' OR (dim.end_date IS NOT NULL AND dim.end_date < CURRENT_DATE()) THEN 'Completed'
+            WHEN dim.status = 'PAUSED' THEN 'Off'
+            WHEN dim.status = 'REMOVED' THEN 'Deleted'
+            WHEN dim.status = 'ENABLED' AND dim.serving_status = 'SERVING' THEN 'Active'
+            ELSE COALESCE(INITCAP(dim.serving_status), INITCAP(dim.status), 'Not delivering')
+        END as campaign_status,
+
         COALESCE(CAST(s.ad_group_id AS STRING), 'N/A') as ad_group_id,
         COALESCE(s.ad_group_name, 'Performance Max') as ad_group_name,
 
@@ -162,6 +187,8 @@ renamed AS (
     FROM combined_source s
     LEFT JOIN geo_names g
         ON CAST(COALESCE(s.user_geo_criterion_id, s.geo_criterion_id) AS STRING) = CAST(g.`Criteria ID` AS STRING)
+    LEFT JOIN campaign_dims dim
+        ON CAST(s.campaign_id AS STRING) = dim.dim_campaign_id
 ),
 
 -- 5. Join Logic (Connect to Calendar)
