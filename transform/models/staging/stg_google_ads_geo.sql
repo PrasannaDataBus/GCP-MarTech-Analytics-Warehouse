@@ -13,8 +13,9 @@ WITH source_standard AS (
         campaign_status,
         CAST(ad_group_id AS STRING) AS ad_group_id,
         CAST(ad_group_name AS STRING) AS ad_group_name,
-        CAST(user_geo_criterion_id AS STRING) AS user_geo_criterion_id,
-        CAST(NULL AS STRING) AS geo_criterion_id, -- Placeholder to match PMAX
+        -- CAST(user_geo_criterion_id AS STRING) AS user_geo_criterion_id,
+        CAST(NULL AS STRING) AS user_geo_criterion_id, -- Now a placeholder
+        CAST(geo_criterion_id AS STRING) AS geo_criterion_id, -- Pulling the Matched location ID
         cost_micros,
         average_cpc,
         impressions,
@@ -28,7 +29,8 @@ WITH source_standard AS (
         currency,
         _ingested_at
 
-    FROM {{ source('marketing_raw', 'google_ads_user_location_raw') }}
+    -- FROM {{ source('marketing_raw', 'google_ads_user_location_raw') }}
+    FROM {{ source('marketing_raw', 'google_ads_geo_raw') }}
 
     WHERE 1=1 -- This ensures the 'AND' below doesn't break syntax
 
@@ -44,7 +46,7 @@ WITH source_standard AS (
 
     -- DEDUPLICATION: Removes duplicate raw rows
     QUALIFY ROW_NUMBER() OVER(
-        PARTITION BY date, campaign_id, ad_group_id, user_geo_criterion_id
+        PARTITION BY date, campaign_id, ad_group_id, geo_criterion_id
         ORDER BY _ingested_at DESC
     ) = 1
 ),
