@@ -16,6 +16,7 @@ WITH source_standard AS (
         -- CAST(user_geo_criterion_id AS STRING) AS user_geo_criterion_id,
         CAST(NULL AS STRING) AS user_geo_criterion_id, -- Now a placeholder
         CAST(geo_criterion_id AS STRING) AS geo_criterion_id, -- Pulling the Matched location ID
+        CAST(location_type AS STRING) AS location_type,
         cost_micros,
         average_cpc,
         impressions,
@@ -46,7 +47,7 @@ WITH source_standard AS (
 
     -- DEDUPLICATION: Removes duplicate raw rows
     QUALIFY ROW_NUMBER() OVER(
-        PARTITION BY date, campaign_id, ad_group_id, geo_criterion_id
+        PARTITION BY date, campaign_id, ad_group_id, geo_criterion_id, location_type
         ORDER BY _ingested_at DESC
     ) = 1
 ),
@@ -64,6 +65,7 @@ source_pmax AS (
         CAST(NULL AS STRING) AS ad_group_name,
         CAST(NULL AS STRING) AS user_geo_criterion_id, -- Placeholder to match Standard
         CAST(geo_criterion_id AS STRING) AS geo_criterion_id,
+        CAST(location_type AS STRING) AS location_type,
         cost_micros,
         average_cpc,
         impressions,
@@ -87,7 +89,7 @@ source_pmax AS (
 
     -- DEDUPLICATION: Removes duplicate raw rows
     QUALIFY ROW_NUMBER() OVER(
-        PARTITION BY date, campaign_id, geo_criterion_id
+        PARTITION BY date, campaign_id, geo_criterion_id, location_type
         ORDER BY _ingested_at DESC
     ) = 1
 ),
@@ -131,7 +133,8 @@ renamed AS (
             CAST(s.date AS STRING),
             CAST(s.campaign_id AS STRING),
             COALESCE(CAST(s.ad_group_id AS STRING), 'PMAX_ONLY'),
-            COALESCE(CAST(s.user_geo_criterion_id AS STRING), CAST(s.geo_criterion_id AS STRING))
+            COALESCE(CAST(s.user_geo_criterion_id AS STRING), CAST(s.geo_criterion_id AS STRING)),
+            CAST(s.location_type AS STRING)
         )) as id,
 
         -- 2. Standardize Date
