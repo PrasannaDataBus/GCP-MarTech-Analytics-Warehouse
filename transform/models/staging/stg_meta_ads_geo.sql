@@ -13,7 +13,7 @@ WITH source AS (
 
     -- DEDUPLICATION: Crucial to prevent inflation
     QUALIFY ROW_NUMBER() OVER(
-        PARTITION BY date, campaign_id, country, region
+        PARTITION BY date, campaign_id, adset_id, ad_id, country, region
         ORDER BY _ingested_at DESC
     ) = 1
 ),
@@ -44,6 +44,8 @@ renamed AS (
         FARM_FINGERPRINT(CONCAT(
             CAST(source.date AS STRING),
             CAST(source.campaign_id AS STRING),
+            CAST(source.adset_id AS STRING),
+            CAST(source.ad_id AS STRING),
             CAST(source.country AS STRING),
             CAST(source.region AS STRING)
         )) as id,
@@ -150,6 +152,10 @@ renamed AS (
 
         CAST(source.campaign_id AS STRING) as campaign_id,
         source.campaign_name,
+        CAST(source.adset_id AS STRING) as adset_id,
+        source.adset_name,
+        CAST(source.ad_id AS STRING) as ad_id,
+        source.ad_name,
 
         -- UI DELIVERY STATUS CALCULATION (Replaces raw status)
         CASE
@@ -270,6 +276,10 @@ SELECT
     campaign_id,
     campaign_name,
     campaign_status,
+    adset_id,
+    adset_name,
+    ad_id,
+    ad_name,
 
     -- Geo Dimensions
     region_name,
