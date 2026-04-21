@@ -15,7 +15,7 @@ WITH source AS (
     -- DEDUPLICATION
     -- Prevents the inflation bug.
     QUALIFY ROW_NUMBER() OVER(
-        PARTITION BY date, campaign_id, adset_id, age, gender
+        PARTITION BY date, campaign_id, adset_id, ad_id, age, gender
         ORDER BY _ingested_at DESC
     ) = 1
 ),
@@ -47,6 +47,7 @@ renamed AS (
             CAST(source.date AS STRING),
             CAST(source.campaign_id AS STRING),
             CAST(source.adset_id AS STRING),
+            CAST(source.ad_id AS STRING),
             CAST(source.age AS STRING),
             CAST(source.gender AS STRING)
         )) as id,
