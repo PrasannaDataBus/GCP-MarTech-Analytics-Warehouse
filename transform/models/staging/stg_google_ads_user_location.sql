@@ -17,7 +17,7 @@ WITH source_standard AS (
         conversions_value,
         _ingested_at
 
-    FROM {{ source('marketing_raw', 'google_ads_user_location_raw') }}
+    FROM {{ source('marketing_raw', 'google_ads_user_location_conversions_raw') }}
 
     WHERE 1=1 -- This ensures the 'AND' below doesn't break syntax
 
