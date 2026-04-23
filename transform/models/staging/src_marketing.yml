@@ -98,6 +98,10 @@ sources:
         description: "PMAX Performance by Geographic Location."
         loaded_at_field: date
 
+      - name: google_ads_user_location_conversions_raw
+        description: "GEO Conversions by Geographic Location."
+        loaded_at_field: date
+
       # =========================================================
       # META ADS (10 Tables)
       # =========================================================
