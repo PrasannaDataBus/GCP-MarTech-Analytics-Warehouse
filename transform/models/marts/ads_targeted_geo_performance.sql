@@ -196,3 +196,7 @@ SELECT
 FROM unioned_data u
 LEFT JOIN country_ref c
     ON u.country_code = c.country_code
+
+-- THE HARD FILTER:
+-- Drops all the noise (Page Views, Engagement, Other) before it hits Power BI
+WHERE u.standardized_conversion_type IN ('PURCHASE', 'LEAD', 'SIGNUP')
