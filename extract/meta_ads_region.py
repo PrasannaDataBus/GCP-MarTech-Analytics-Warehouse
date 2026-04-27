@@ -15,6 +15,7 @@ from datetime import datetime, date, timedelta
 from dotenv import load_dotenv
 import pandas as pd
 from google.cloud import bigquery
+import json
 
 # --- Meta SDK Imports ---
 from facebook_business.api import FacebookAdsApi
@@ -253,6 +254,8 @@ def extract_region_data(account_id: str, account_name: str, start_date: str, end
                     "cpm": float(item.get('cpm', 0.0)),
                     "conversions": total_conv,
                     "conversion_value": total_val,
+                    "actions": json.dumps(item.get('actions', [])),
+                    "action_values": json.dumps(item.get('action_values', [])),
                     "currency": currency,
                     "_ingested_at": datetime.now()
                 }
@@ -371,7 +374,7 @@ def get_last_loaded_date(bq_client):
     return None
 
 
-# --- LOAD FUNCTION (Idempotent) ---
+# # --- LOAD FUNCTION (Idempotent) ---
 def load_to_bigquery(df: pd.DataFrame, start_date: str, end_date: str, account_id: str, bq_client):
     table_id = f"{PROJECT_ID}.{RAW_DATASET_NAME}.{META_REGION_TABLE_NAME}"
 
@@ -422,6 +425,8 @@ def load_to_bigquery(df: pd.DataFrame, start_date: str, end_date: str, account_i
 
             bigquery.SchemaField("conversions", "FLOAT"),
             bigquery.SchemaField("conversion_value", "FLOAT"),
+            bigquery.SchemaField("actions", "STRING"),
+            bigquery.SchemaField("action_values", "STRING"),
 
             bigquery.SchemaField("currency", "STRING"),
             bigquery.SchemaField("_ingested_at", "TIMESTAMP"),
@@ -553,18 +558,18 @@ def main():
     #             error_msg = f"Failed Backfill {acc_name} ({yr}): {e}"
     #             print(error_msg)
     #             failed_accounts.append(error_msg)
-
-    # --- FINAL FAILURE CHECK ---
-    # If there were ANY failures during the loop, raise an exception now.
-    if failed_accounts:
-        print("\nCRITICAL: The following accounts failed extraction:")
-        for err in failed_accounts:
-            print(f" - {err}")
-
-        # This ensures Airflow marks the task as FAILED so you get the email/alert
-        raise Exception(f"Script completed with errors in {len(failed_accounts)} accounts.")
-
-    print("--- Meta Ads Load Complete ---")
+    #
+    # # --- FINAL FAILURE CHECK ---
+    # # If there were ANY failures during the loop, raise an exception now.
+    # if failed_accounts:
+    #     print("\nCRITICAL: The following accounts failed extraction:")
+    #     for err in failed_accounts:
+    #         print(f" - {err}")
+    #
+    #     # This ensures Airflow marks the task as FAILED so you get the email/alert
+    #     raise Exception(f"Script completed with errors in {len(failed_accounts)} accounts.")
+    #
+    # print("--- Meta Ads Load Complete ---")
 
 
 if __name__ == "__main__":

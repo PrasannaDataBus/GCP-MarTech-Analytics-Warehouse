@@ -53,6 +53,19 @@ google_ads AS (
         canonical_name,
         geo_target_type,
         is_targeting_location,
+        conversion_action_name,
+
+        -- GOOGLE STRICT MAPPING LOGIC
+        CASE
+            WHEN conversion_action_name = 'NOTWORKING-Do NOT USE' THEN 'PURCHASE'
+            WHEN conversion_action_name LIKE '%NOTWORKING%' THEN 'OTHER'
+            WHEN conversion_action_name LIKE '%Do NOT USE%' THEN 'OTHER'
+            WHEN conversion_action_name = 'Registration' THEN 'INITIATE_CHECKOUT'
+            WHEN conversion_action_name LIKE '%Ticket%' THEN 'PURCHASE'
+            WHEN conversion_action_name IN ('Registrations', 'Submit lead form', 'Newsletter') THEN 'LEAD'
+            -- Add any other common strings here if needed, otherwise fallback to OTHER
+            ELSE 'OTHER'
+        END as standardized_conversion_type,
 
         -- Metrics
         cost,
@@ -60,7 +73,17 @@ google_ads AS (
         clicks,
         unique_clicks,
         conversions,
-        conversion_value,
+
+        -- GOOGLE REVENUE SAFETY NET
+        CASE
+            WHEN conversion_action_name IN ('Registration', 'Registrations') THEN 0.0
+            WHEN (
+                conversion_action_name LIKE '%Ticket%' OR
+                conversion_action_name = 'NOTWORKING-Do NOT USE'
+            ) THEN conversion_value
+            ELSE 0.0
+        END as conversion_value,
+
         ctr,
         unique_ctr,
         average_cpc,
@@ -105,7 +128,35 @@ meta_ads AS (
         region_name,
         canonical_name,
         geo_target_type,
-        CAST(True AS BOOLEAN) as is_targeting_location,
+        is_targeting_location,
+        conversion_action_name,
+
+        -- META STRICT MAPPING LOGIC
+        CASE
+            WHEN conversion_action_name = 'offsite_conversion.fb_pixel_purchase' THEN 'PURCHASE'
+            WHEN conversion_action_name = 'offsite_conversion.fb_pixel_lead' THEN 'LEAD'
+            WHEN LOWER(conversion_action_name) LIKE '%complete_registration%' THEN 'SIGNUP'
+            WHEN LOWER(conversion_action_name) LIKE '%subscribe%' THEN 'SIGNUP'
+            WHEN LOWER(conversion_action_name) LIKE '%add_to_cart%' THEN 'ADD_TO_CART'
+            WHEN LOWER(conversion_action_name) LIKE '%checkout%' THEN 'INITIATE_CHECKOUT'
+            WHEN LOWER(conversion_action_name) LIKE '%add_payment_info%' THEN 'INITIATE_CHECKOUT'
+            WHEN LOWER(conversion_action_name) LIKE '%content_view%' THEN 'PAGE_VIEW'
+            WHEN LOWER(conversion_action_name) LIKE '%view_content%' THEN 'PAGE_VIEW'
+            WHEN LOWER(conversion_action_name) LIKE '%landing_page_view%' THEN 'PAGE_VIEW'
+            WHEN LOWER(conversion_action_name) LIKE '%page_view%' THEN 'PAGE_VIEW'
+            WHEN LOWER(conversion_action_name) LIKE '%app_site_visit%' THEN 'PAGE_VIEW'
+            WHEN LOWER(conversion_action_name) LIKE '%search%' THEN 'SEARCH'
+            WHEN LOWER(conversion_action_name) LIKE '%contact%' THEN 'CONTACT'
+            WHEN LOWER(conversion_action_name) LIKE '%call%' THEN 'CONTACT'
+            WHEN LOWER(conversion_action_name) LIKE '%messaging%' THEN 'CONTACT'
+            WHEN LOWER(conversion_action_name) LIKE '%engagement%' THEN 'ENGAGEMENT'
+            WHEN LOWER(conversion_action_name) LIKE '%like%' THEN 'ENGAGEMENT'
+            WHEN LOWER(conversion_action_name) LIKE '%comment%' THEN 'ENGAGEMENT'
+            WHEN LOWER(conversion_action_name) LIKE '%reaction%' THEN 'ENGAGEMENT'
+            WHEN LOWER(conversion_action_name) LIKE '%video_view%' THEN 'ENGAGEMENT'
+            WHEN LOWER(conversion_action_name) LIKE '%post%' THEN 'ENGAGEMENT'
+            ELSE 'OTHER'
+        END as standardized_conversion_type,
 
         -- Metrics
         cost,
@@ -113,13 +164,19 @@ meta_ads AS (
         clicks,
         unique_clicks,
         conversions,
-        conversion_value,
+
+        -- META REVENUE SAFETY NET
+        CASE
+            WHEN conversion_action_name = 'offsite_conversion.fb_pixel_purchase' THEN conversion_value
+            ELSE 0.0
+        END as conversion_value,
+
         ctr,
         unique_ctr,
         average_cpc,
         currency
 
-    FROM {{ ref('stg_meta_ads_geo') }}
+    FROM {{ ref('stg_meta_ads_geo_conversions') }}
 ),
 
 unioned_data AS (

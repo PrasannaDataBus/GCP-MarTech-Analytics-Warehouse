@@ -1,6 +1,6 @@
 {{ config(
     materialized='view',
-    tags=['silver', 'google', 'daily', 'user_location']
+    tags=['silver', 'google', 'daily', 'user_location', 'conversions']
 ) }}
 
 WITH source_standard AS (
@@ -10,25 +10,14 @@ WITH source_standard AS (
         account_name,
         campaign_id,
         campaign_name,
-        campaign_status,
-        CAST(ad_group_id AS STRING) AS ad_group_id,
-        CAST(ad_group_name AS STRING) AS ad_group_name,
         CAST(user_geo_criterion_id AS STRING) AS user_geo_criterion_id,
         is_targeting_location, -- This boolean tells us if it was explicitly targeted
-        cost_micros,
-        average_cpc,
-        impressions,
-        clicks,
-        ctr,
+        CAST(conversion_action_name AS STRING) AS conversion_action_name,
         conversions,
         conversions_value,
-        view_through_conversions,
-        all_conversions,
-        bidding_strategy_type,
-        currency,
         _ingested_at
 
-    FROM {{ source('marketing_raw', 'google_ads_user_location_raw') }}
+    FROM {{ source('marketing_raw', 'google_ads_user_location_conversions_raw') }}
 
     WHERE 1=1 -- This ensures the 'AND' below doesn't break syntax
 
@@ -39,7 +28,7 @@ WITH source_standard AS (
 
     -- DEDUPLICATION: Removes duplicate raw rows
     QUALIFY ROW_NUMBER() OVER(
-        PARTITION BY date, campaign_id, ad_group_id, user_geo_criterion_id
+        PARTITION BY date, campaign_id, user_geo_criterion_id, conversion_action_name
         ORDER BY _ingested_at DESC
     ) = 1
 ),
@@ -75,8 +64,8 @@ renamed AS (
         FARM_FINGERPRINT(CONCAT(
             CAST(s.date AS STRING),
             CAST(s.campaign_id AS STRING),
-            COALESCE(CAST(s.ad_group_id AS STRING), 'NA'),
-            CAST(s.user_geo_criterion_id AS STRING)
+            CAST(s.user_geo_criterion_id AS STRING),
+            CAST(s.conversion_action_name AS STRING)
         )) as id,
 
         -- 2. Standardize Date
@@ -105,32 +94,35 @@ renamed AS (
             ELSE COALESCE(INITCAP(dim.serving_status), INITCAP(dim.status), 'Not delivering')
         END as campaign_status,
 
-        COALESCE(CAST(s.ad_group_id AS STRING), 'N/A') as ad_group_id,
-        COALESCE(s.ad_group_name, 'Unknown') as ad_group_name,
+        -- Ad Groups are not in the conversion API, so we hardcode them to keep the schema intact
+        'N/A' as ad_group_id,
+        'Unknown' as ad_group_name,
+
+        s.is_targeting_location,
+        s.conversion_action_name,
 
         -- 3. Geography Dimensions
-        s.is_targeting_location,
         COALESCE(g.Name, 'Unknown') as region_name,
         COALESCE(g.`Canonical Name`, 'Unknown') as canonical_name,
         COALESCE(g.`Country Code`, 'Unknown') as country_code,
         COALESCE(g.`Target Type`, 'Unknown') as geo_target_type,
 
         -- 4. Metrics
-        (SAFE_CAST(s.cost_micros AS FLOAT64) / 1000000) as cost,
-        SAFE_CAST(s.average_cpc AS FLOAT64) as average_cpc,
-        SAFE_CAST(s.impressions AS INT64) as impressions,
-        SAFE_CAST(s.clicks AS INT64) as clicks,
-        SAFE_CAST(s.clicks AS INT64) as unique_clicks,
-        SAFE_CAST(s.ctr AS FLOAT64) as ctr,
-        SAFE_CAST(s.ctr AS FLOAT64) as unique_ctr,
+        0.0 as cost,
+        0.0 as average_cpc,
+        0 as impressions,
+        0 as clicks,
+        0 as unique_clicks,
+        0.0 as ctr,
+        0.0 as unique_ctr,
         SAFE_CAST(s.conversions AS FLOAT64) as conversions,
         SAFE_CAST(s.conversions_value AS FLOAT64) as conversion_value,
 
         -- Google Specific
-        SAFE_CAST(s.view_through_conversions AS FLOAT64) as view_through_conversions,
-        SAFE_CAST(s.all_conversions AS FLOAT64) as all_conversions,
-        s.bidding_strategy_type,
-        s.currency
+        0.0 as view_through_conversions,
+        0.0 as all_conversions,
+        'N/A' as bidding_strategy_type,
+        'N/A' as currency
 
     FROM source_standard s
     LEFT JOIN geo_names g
@@ -222,6 +214,7 @@ SELECT
     ad_group_id,
     ad_group_name,
     is_targeting_location,
+    conversion_action_name,
 
     -- Geo Dimensions
     region_name,
