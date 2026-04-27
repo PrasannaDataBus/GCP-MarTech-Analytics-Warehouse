@@ -3,7 +3,7 @@
     tags=['silver', 'meta', 'daily', 'geo', 'conversions']
 ) }}
 
-WITH source AS (
+WITH raw_dedup AS (
     SELECT * FROM {{ source('marketing_raw', 'meta_ads_region_raw') }}
 
     -- COST SAVER: Runs only in Dev.
