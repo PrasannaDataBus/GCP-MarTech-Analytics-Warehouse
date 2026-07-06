@@ -197,6 +197,10 @@ FROM unioned_data u
 LEFT JOIN country_ref c
     ON u.country_code = c.country_code
 
--- THE HARD FILTER:
--- Drops all the noise (Page Views, Engagement, Other) before it hits Power BI
-WHERE u.standardized_conversion_type IN ('PURCHASE', 'LEAD', 'SIGNUP')
+-- THE SMART FILTER:
+-- Google: Keeps all valid actions (matching the 60.41 in the UI), only drops explicitly 'JUNK' tags.
+-- Meta: Hard-filters out all 'OTHER', 'PAGE_VIEW', and 'ENGAGEMENT' tags (preventing the 15,583 India spike).
+WHERE
+    (u.platform = 'Google Ads' AND u.standardized_conversion_type != 'OTHER')
+    OR
+    (u.platform = 'Meta Ads' AND u.standardized_conversion_type IN ('PURCHASE', 'LEAD', 'SIGNUP', 'INITIATE_CHECKOUT', 'ADD_TO_CART'))
