@@ -558,17 +558,17 @@ def main():
     #             print(error_msg)
     #             failed_accounts.append(error_msg)
 
-    # # --- FINAL FAILURE CHECK ---
-    # # If there were ANY failures during the loop, raise an exception now.
-    # if failed_accounts:
-    #     print("\nCRITICAL: The following accounts failed extraction:")
-    #     for err in failed_accounts:
-    #         print(f" - {err}")
-    #
-    #     # This ensures Airflow marks the task as FAILED so you get the email/alert
-    #     raise Exception(f"Script completed with errors in {len(failed_accounts)} accounts.")
-    #
-    # print("--- Meta Ads Load Complete ---")
+    # --- FINAL FAILURE CHECK ---
+    # If there were ANY failures during the loop, raise an exception now.
+    if failed_accounts:
+        print("\nCRITICAL: The following accounts failed extraction:")
+        for err in failed_accounts:
+            print(f" - {err}")
+
+        # This ensures Airflow marks the task as FAILED so you get the email/alert
+        raise Exception(f"Script completed with errors in {len(failed_accounts)} accounts.")
+
+    print("--- Meta Ads Load Complete ---")
 
 
 if __name__ == "__main__":
