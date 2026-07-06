@@ -146,6 +146,10 @@ sources:
         description: "Geographic performance (Region/State)."
         loaded_at_field: date_start
 
+      - name: meta_ads_country_raw
+        description: "Geographic Conversion performance (Country)."
+        loaded_at_field: date_start
+
       # =========================================================
       # CRM / Sales conversions
       # =========================================================
