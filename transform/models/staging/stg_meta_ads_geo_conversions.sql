@@ -4,7 +4,7 @@
 ) }}
 
 WITH raw_dedup AS (
-    SELECT * FROM {{ source('marketing_raw', 'meta_ads_region_raw') }}
+    SELECT * FROM {{ source('marketing_raw', 'meta_ads_country_raw') }}
 
     -- COST SAVER: Runs only in Dev.
     {% if target.name == 'dev' %}
@@ -13,7 +13,7 @@ WITH raw_dedup AS (
 
     -- DEDUPLICATION: Crucial to prevent inflation
     QUALIFY ROW_NUMBER() OVER(
-        PARTITION BY date, campaign_id, adset_id, ad_id, country, region
+        PARTITION BY date, campaign_id, adset_id, ad_id, country
         ORDER BY _ingested_at DESC
     ) = 1
 ),
@@ -64,7 +64,6 @@ renamed AS (
             CAST(source.adset_id AS STRING),
             CAST(source.ad_id AS STRING),
             CAST(source.country AS STRING),
-            CAST(source.region AS STRING),
             CAST(source.conversion_action_name AS STRING)
         )) as id,
 
@@ -190,14 +189,11 @@ renamed AS (
         source.conversion_action_name,
 
         -- 4. Geography Dimensions
-        source.region as region_name,
+        'Unknown' as region_name,
         -- Generate canonical name to match Google format
-        CONCAT(source.region, ', ', source.country) as canonical_name,
+        source.country as canonical_name,
         source.country as country_code,
-        CASE
-            WHEN source.region IS NULL OR source.region = '' THEN 'Country'
-            ELSE 'Region'
-        END as geo_target_type,
+        'Country' as geo_target_type,
 
         -- Metrics Zeroed Out
         0.0 as cost,
