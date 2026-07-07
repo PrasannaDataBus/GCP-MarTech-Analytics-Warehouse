@@ -133,14 +133,13 @@ meta_ads AS (
 
         -- META STRICT MAPPING LOGIC
         CASE
-            WHEN conversion_action_name = 'purchase' THEN 'PURCHASE'
-            WHEN conversion_action_name = 'lead' THEN 'LEAD'
-            WHEN conversion_action_name = 'complete_registration' THEN 'SIGNUP'
-            WHEN conversion_action_name = 'add_to_cart' THEN 'ADD_TO_CART'
-            -- We use LIKE for checkout/calls as there are no base versions in your raw data
-            WHEN conversion_action_name LIKE '%initiate_checkout%' THEN 'INITIATE_CHECKOUT'
-            WHEN conversion_action_name LIKE '%call_confirm%' THEN 'CONTACT'
-            WHEN conversion_action_name LIKE '%call_connect%' THEN 'CONTACT'
+            WHEN LOWER(TRIM(conversion_action_name)) = 'purchase' THEN 'PURCHASE'
+            WHEN LOWER(TRIM(conversion_action_name)) = 'lead' THEN 'LEAD'
+            WHEN LOWER(TRIM(conversion_action_name)) = 'complete_registration' THEN 'SIGNUP'
+            WHEN LOWER(TRIM(conversion_action_name)) = 'add_to_cart' THEN 'ADD_TO_CART'
+            WHEN LOWER(conversion_action_name) LIKE '%initiate_checkout%' THEN 'INITIATE_CHECKOUT'
+            WHEN LOWER(conversion_action_name) LIKE '%call_confirm%' THEN 'CONTACT'
+            WHEN LOWER(conversion_action_name) LIKE '%call_connect%' THEN 'CONTACT'
             ELSE 'OTHER'
         END as standardized_conversion_type,
 
@@ -153,7 +152,7 @@ meta_ads AS (
 
         -- META REVENUE SAFETY NET
         CASE
-            WHEN conversion_action_name = 'purchase' THEN conversion_value
+            WHEN LOWER(TRIM(conversion_action_name)) = 'purchase' THEN conversion_value
             ELSE 0.0
         END as conversion_value,
 
