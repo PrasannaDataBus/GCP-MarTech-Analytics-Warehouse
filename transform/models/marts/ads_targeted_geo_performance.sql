@@ -133,28 +133,14 @@ meta_ads AS (
 
         -- META STRICT MAPPING LOGIC
         CASE
-            WHEN conversion_action_name = 'offsite_conversion.fb_pixel_purchase' THEN 'PURCHASE'
-            WHEN conversion_action_name = 'offsite_conversion.fb_pixel_lead' THEN 'LEAD'
-            WHEN LOWER(conversion_action_name) LIKE '%complete_registration%' THEN 'SIGNUP'
-            WHEN LOWER(conversion_action_name) LIKE '%subscribe%' THEN 'SIGNUP'
-            WHEN LOWER(conversion_action_name) LIKE '%add_to_cart%' THEN 'ADD_TO_CART'
-            WHEN LOWER(conversion_action_name) LIKE '%checkout%' THEN 'INITIATE_CHECKOUT'
-            WHEN LOWER(conversion_action_name) LIKE '%add_payment_info%' THEN 'INITIATE_CHECKOUT'
-            WHEN LOWER(conversion_action_name) LIKE '%content_view%' THEN 'PAGE_VIEW'
-            WHEN LOWER(conversion_action_name) LIKE '%view_content%' THEN 'PAGE_VIEW'
-            WHEN LOWER(conversion_action_name) LIKE '%landing_page_view%' THEN 'PAGE_VIEW'
-            WHEN LOWER(conversion_action_name) LIKE '%page_view%' THEN 'PAGE_VIEW'
-            WHEN LOWER(conversion_action_name) LIKE '%app_site_visit%' THEN 'PAGE_VIEW'
-            WHEN LOWER(conversion_action_name) LIKE '%search%' THEN 'SEARCH'
-            WHEN LOWER(conversion_action_name) LIKE '%contact%' THEN 'CONTACT'
-            WHEN LOWER(conversion_action_name) LIKE '%call%' THEN 'CONTACT'
-            WHEN LOWER(conversion_action_name) LIKE '%messaging%' THEN 'CONTACT'
-            WHEN LOWER(conversion_action_name) LIKE '%engagement%' THEN 'ENGAGEMENT'
-            WHEN LOWER(conversion_action_name) LIKE '%like%' THEN 'ENGAGEMENT'
-            WHEN LOWER(conversion_action_name) LIKE '%comment%' THEN 'ENGAGEMENT'
-            WHEN LOWER(conversion_action_name) LIKE '%reaction%' THEN 'ENGAGEMENT'
-            WHEN LOWER(conversion_action_name) LIKE '%video_view%' THEN 'ENGAGEMENT'
-            WHEN LOWER(conversion_action_name) LIKE '%post%' THEN 'ENGAGEMENT'
+            WHEN conversion_action_name = 'purchase' THEN 'PURCHASE'
+            WHEN conversion_action_name = 'lead' THEN 'LEAD'
+            WHEN conversion_action_name = 'complete_registration' THEN 'SIGNUP'
+            WHEN conversion_action_name = 'add_to_cart' THEN 'ADD_TO_CART'
+            -- We use LIKE for checkout/calls as there are no base versions in your raw data
+            WHEN conversion_action_name LIKE '%initiate_checkout%' THEN 'INITIATE_CHECKOUT'
+            WHEN conversion_action_name LIKE '%call_confirm%' THEN 'CONTACT'
+            WHEN conversion_action_name LIKE '%call_connect%' THEN 'CONTACT'
             ELSE 'OTHER'
         END as standardized_conversion_type,
 
@@ -167,7 +153,7 @@ meta_ads AS (
 
         -- META REVENUE SAFETY NET
         CASE
-            WHEN conversion_action_name = 'offsite_conversion.fb_pixel_purchase' THEN conversion_value
+            WHEN conversion_action_name = 'purchase' THEN conversion_value
             ELSE 0.0
         END as conversion_value,
 
@@ -203,4 +189,4 @@ LEFT JOIN country_ref c
 WHERE
     (u.platform = 'Google Ads' AND u.standardized_conversion_type != 'OTHER')
     OR
-    (u.platform = 'Meta Ads' AND u.standardized_conversion_type IN ('PURCHASE', 'LEAD', 'SIGNUP', 'INITIATE_CHECKOUT', 'ADD_TO_CART'))
+    (u.platform = 'Meta Ads' AND u.standardized_conversion_type IN ('PURCHASE', 'LEAD', 'SIGNUP', 'INITIATE_CHECKOUT', 'ADD_TO_CART', 'CONTACT'))
