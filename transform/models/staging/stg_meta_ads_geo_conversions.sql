@@ -3,23 +3,17 @@
     tags=['silver', 'meta', 'daily', 'geo', 'conversions']
 ) }}
 
-WITH raw_dedup AS (
+WITH raw_data AS (
     SELECT * FROM {{ source('marketing_raw', 'meta_ads_country_raw') }}
 
     -- COST SAVER: Runs only in Dev.
     {% if target.name == 'dev' %}
     WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY)
     {% endif %}
-
-    -- DEDUPLICATION: Crucial to prevent inflation
-    QUALIFY ROW_NUMBER() OVER(
-        PARTITION BY date, campaign_id, adset_id, ad_id, country
-        ORDER BY _ingested_at DESC
-    ) = 1
 ),
 
--- UNNESTING LOGIC: Explodes the JSON array into separate rows per action
-source AS (
+-- 1. UNNEST FIRST: Explode the JSON array into separate rows per action
+unnested_source AS (
     SELECT
         r.* EXCEPT(actions, action_values),
         JSON_EXTRACT_SCALAR(act, '$.action_type') AS conversion_action_name,
@@ -30,9 +24,19 @@ source AS (
             WHERE JSON_EXTRACT_SCALAR(val, '$.action_type') = JSON_EXTRACT_SCALAR(act, '$.action_type')
             LIMIT 1
         ) AS extracted_conversion_value
-    FROM raw_dedup r
+    FROM raw_data r
     INNER JOIN UNNEST(JSON_EXTRACT_ARRAY(r.actions)) AS act
     WHERE JSON_EXTRACT_SCALAR(act, '$.action_type') IS NOT NULL
+),
+
+-- 2. DEDUP SECOND: Now partition by the conversion_action_name as well!
+source AS (
+    SELECT *
+    FROM unnested_source
+    QUALIFY ROW_NUMBER() OVER(
+        PARTITION BY date, campaign_id, adset_id, ad_id, country, conversion_action_name
+        ORDER BY _ingested_at DESC
+    ) = 1
 ),
 
 -- Load New Campaign Dimensions (Schedules & Status)
