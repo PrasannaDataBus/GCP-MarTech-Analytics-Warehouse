@@ -52,7 +52,7 @@ google_ads AS (
         region_name,
         canonical_name,
         geo_target_type,
-        is_targeting_location,
+        location_type,
         conversion_action_name,
 
         -- GOOGLE STRICT MAPPING LOGIC
@@ -128,7 +128,7 @@ meta_ads AS (
         region_name,
         canonical_name,
         geo_target_type,
-        is_targeting_location,
+        location_type,
         conversion_action_name,
 
         -- META STRICT MAPPING LOGIC

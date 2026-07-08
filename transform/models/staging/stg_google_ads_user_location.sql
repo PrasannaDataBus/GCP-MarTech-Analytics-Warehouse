@@ -11,7 +11,7 @@ WITH source_standard AS (
         campaign_id,
         campaign_name,
         CAST(user_geo_criterion_id AS STRING) AS user_geo_criterion_id,
-        is_targeting_location, -- This boolean tells us if it was explicitly targeted
+        CAST(location_type AS STRING) AS location_type,
         CAST(conversion_action_name AS STRING) AS conversion_action_name,
         conversions,
         conversions_value,
@@ -98,7 +98,7 @@ renamed AS (
         'N/A' as ad_group_id,
         'Unknown' as ad_group_name,
 
-        s.is_targeting_location,
+        s.location_type,
         s.conversion_action_name,
 
         -- 3. Geography Dimensions
@@ -213,7 +213,7 @@ SELECT
     campaign_status,
     ad_group_id,
     ad_group_name,
-    is_targeting_location,
+    location_type,
     conversion_action_name,
 
     -- Geo Dimensions

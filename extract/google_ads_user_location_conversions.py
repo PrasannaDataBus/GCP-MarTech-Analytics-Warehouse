@@ -97,12 +97,12 @@ SELECT
   customer.descriptive_name,
   campaign.id,
   campaign.name,
-  user_location_view.country_criterion_id,
-  user_location_view.targeting_location,
+  geographic_view.country_criterion_id,
+  geographic_view.location_type,
   segments.conversion_action_name,
   metrics.conversions,
   metrics.conversions_value
-FROM user_location_view
+FROM geographic_view
 WHERE segments.date BETWEEN '{start_date}' AND '{end_date}'
 AND metrics.conversions > 0
 """
@@ -153,7 +153,7 @@ def get_child_accounts(manager_customer_id: str, ads_client):
 
 
 def extract_targeted_geo_conversions(customer_id: str, start_date: str, end_date: str, ads_client):
-    """Extracts USER LOCATION conversion / ROAS performance data from Google Ads for a specific account and date range."""
+    """Extracts GEOGRAPHIC VIEW conversion / ROAS performance data from Google Ads for a specific account and date range."""
     service = ads_client.get_service("GoogleAdsService")
     query = QUERY_TEMPLATE.format(start_date=start_date, end_date=end_date)
     response = service.search_stream(customer_id=customer_id, query=query)
@@ -167,8 +167,8 @@ def extract_targeted_geo_conversions(customer_id: str, start_date: str, end_date
                 "account_name": row.customer.descriptive_name,
                 "campaign_id": str(row.campaign.id),
                 "campaign_name": row.campaign.name,
-                "user_geo_criterion_id": str(row.user_location_view.country_criterion_id),
-                "is_targeting_location": row.user_location_view.targeting_location,
+                "user_geo_criterion_id": str(row.geographic_view.country_criterion_id),
+                "location_type": row.geographic_view.location_type.name,
                 "conversion_action_name": row.segments.conversion_action_name,
                 "conversions": row.metrics.conversions,
                 "conversions_value": row.metrics.conversions_value,
@@ -217,7 +217,7 @@ def load_to_bigquery(df: pd.DataFrame, start_date: str, end_date: str, account_n
                                             bigquery.SchemaField("campaign_id", "STRING"),
                                             bigquery.SchemaField("campaign_name", "STRING"),
                                             bigquery.SchemaField("user_geo_criterion_id", "STRING"),
-                                            bigquery.SchemaField("is_targeting_location", "BOOLEAN"),
+                                            bigquery.SchemaField("location_type", "STRING"),
                                             bigquery.SchemaField("conversion_action_name", "STRING"),
                                             bigquery.SchemaField("conversions", "FLOAT"),
                                             bigquery.SchemaField("conversions_value", "FLOAT"),
@@ -334,7 +334,7 @@ if __name__ == "__main__":
 #                                             bigquery.SchemaField("campaign_id", "STRING"),
 #                                             bigquery.SchemaField("campaign_name", "STRING"),
 #                                             bigquery.SchemaField("user_geo_criterion_id", "STRING"),
-#                                             bigquery.SchemaField("is_targeting_location", "BOOLEAN"),
+#                                             bigquery.SchemaField("location_type", "STRING"),
 #                                             bigquery.SchemaField("conversion_action_name", "STRING"),
 #                                             bigquery.SchemaField("conversions", "FLOAT"),
 #                                             bigquery.SchemaField("conversions_value", "FLOAT"),
