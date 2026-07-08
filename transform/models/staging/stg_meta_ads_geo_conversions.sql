@@ -189,7 +189,7 @@ renamed AS (
             ELSE COALESCE(INITCAP(dim.effective_status), 'Not delivering')
         END as campaign_status,
 
-        CAST(True AS BOOLEAN) as is_targeting_location,
+        'TARGETED_LOCATION' as location_type,
         source.conversion_action_name,
 
         -- 4. Geography Dimensions
@@ -303,7 +303,7 @@ SELECT
     campaign_status,
     ad_group_id,
     ad_group_name,
-    is_targeting_location,
+    location_type,
     conversion_action_name,
 
     -- Geo Dimensions
