@@ -28,7 +28,7 @@ WITH source_standard AS (
 
     -- DEDUPLICATION: Removes duplicate raw rows
     QUALIFY ROW_NUMBER() OVER(
-        PARTITION BY date, campaign_id, user_geo_criterion_id, conversion_action_name
+        PARTITION BY date, campaign_id, user_geo_criterion_id, location_type, conversion_action_name
         ORDER BY _ingested_at DESC
     ) = 1
 ),
@@ -65,6 +65,7 @@ renamed AS (
             CAST(s.date AS STRING),
             CAST(s.campaign_id AS STRING),
             CAST(s.user_geo_criterion_id AS STRING),
+            CAST(s.location_type AS STRING),
             CAST(s.conversion_action_name AS STRING)
         )) as id,
 
