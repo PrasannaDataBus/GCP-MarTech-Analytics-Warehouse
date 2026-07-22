@@ -67,6 +67,7 @@ WITH google_ads AS (
             WHEN conversion_action_name = 'Registrations' THEN 'LEAD'
             WHEN conversion_action_name LIKE '%Submit lead form%' THEN 'LEAD'
             WHEN conversion_action_name LIKE '%Newsletter%' THEN 'LEAD'
+            WHEN conversion_action_name = 'Prospect' THEN 'LEAD'
 
             -- FALLBACK TO CATEGORIES (Standard Logic)
             WHEN conversion_category = 'PURCHASE' THEN 'PURCHASE'
@@ -79,13 +80,22 @@ WITH google_ads AS (
             ELSE 'OTHER'
         END as standardized_conversion_type,
 
-        -- Metrics
-        conversions,
+        -- METRICS (SMART ROUTING)
+        -- Route secondary lead actions to 'all_conversions' so they aren't lost,
+        -- while keeping standard 'conversions' for Purchases to protect ROAS.
+        CASE
+            WHEN conversion_action_name = 'Prospect' THEN all_conversions
+            WHEN conversion_category = 'SUBMIT_LEAD_FORM' THEN all_conversions
+            WHEN conversion_action_name IN ('Registrations', 'Registration') THEN all_conversions
+            WHEN conversion_action_name LIKE '%Submit lead form%' THEN all_conversions
+            WHEN conversion_action_name LIKE '%Newsletter%' THEN all_conversions
+            ELSE conversions
+        END as conversions,
 
         -- SAFETY NET: Force 0.0 Value for non-Purchases (Preserved)
         CASE
             -- Rule 1: Kill the "Registration" value immediately
-            WHEN conversion_action_name IN ('Registration', 'Registrations') THEN 0.0
+            WHEN conversion_action_name IN ('Registration', 'Registrations', 'Prospect') THEN 0.0
 
             -- Rule 2: Allow valid purchase categories
             WHEN (
