@@ -15,6 +15,8 @@ WITH source_standard AS (
         CAST(conversion_action_name AS STRING) AS conversion_action_name,
         conversions,
         conversions_value,
+        all_conversions,
+        all_conversions_value,
         _ingested_at
 
     FROM {{ source('marketing_raw', 'google_ads_user_location_conversions_raw') }}
@@ -121,7 +123,8 @@ renamed AS (
 
         -- Google Specific
         0.0 as view_through_conversions,
-        0.0 as all_conversions,
+        SAFE_CAST(s.all_conversions AS FLOAT64) as all_conversions,
+        SAFE_CAST(s.all_conversions_value AS FLOAT64) as all_conversions_value,
         'N/A' as bidding_strategy_type,
         'N/A' as currency
 
@@ -235,6 +238,7 @@ SELECT
     conversion_value,
     view_through_conversions,
     all_conversions,
+    all_conversions_value,
     bidding_strategy_type,
     currency,
 
