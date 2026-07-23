@@ -61,8 +61,10 @@ google_ads AS (
             WHEN conversion_action_name LIKE '%NOTWORKING%' THEN 'OTHER'
             WHEN conversion_action_name LIKE '%Do NOT USE%' THEN 'OTHER'
             WHEN conversion_action_name = 'Registration' THEN 'INITIATE_CHECKOUT'
-            WHEN conversion_action_name LIKE '%Ticket%' THEN 'PURCHASE'
+            WHEN LOWER(conversion_action_name) LIKE '%ticket%' THEN 'PURCHASE'
             WHEN conversion_action_name IN ('Registrations', 'Submit lead form', 'Newsletter', 'Prospect') THEN 'LEAD'
+            WHEN LOWER(conversion_action_name) LIKE '%submit lead form%' THEN 'LEAD'
+            WHEN LOWER(conversion_action_name) LIKE '%newsletter%' THEN 'LEAD'
             -- Add any other common strings here if needed, otherwise fallback to OTHER
             ELSE 'OTHER'
         END as standardized_conversion_type,
@@ -77,16 +79,18 @@ google_ads AS (
         CASE
             WHEN conversion_action_name = 'Prospect' THEN all_conversions
             WHEN conversion_action_name IN ('Registrations', 'Registration') THEN all_conversions
-            WHEN conversion_action_name LIKE '%Submit lead form%' THEN all_conversions
-            WHEN conversion_action_name LIKE '%Newsletter%' THEN all_conversions
+            WHEN LOWER(conversion_action_name) LIKE '%submit lead form%' THEN all_conversions
+            WHEN LOWER(conversion_action_name) LIKE '%newsletter%' THEN all_conversions
             ELSE conversions
         END as conversions,
 
         -- GOOGLE REVENUE SAFETY NET
         CASE
             WHEN conversion_action_name IN ('Registration', 'Registrations', 'Prospect') THEN 0.0
+            WHEN LOWER(conversion_action_name) LIKE '%submit lead form%' THEN 0.0
+            WHEN LOWER(conversion_action_name) LIKE '%newsletter%' THEN 0.0
             WHEN (
-                conversion_action_name LIKE '%Ticket%' OR
+                LOWER(conversion_action_name) LIKE '%ticket%' OR
                 conversion_action_name = 'NOTWORKING-Do NOT USE'
             ) THEN conversion_value
             ELSE 0.0
