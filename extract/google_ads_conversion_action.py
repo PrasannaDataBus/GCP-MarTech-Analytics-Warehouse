@@ -109,7 +109,7 @@ SELECT
   metrics.all_conversions_value
 FROM campaign
    WHERE segments.date BETWEEN '{start_date}' AND '{end_date}'
-   AND metrics.conversions > 0
+   AND metrics.all_conversions > 0
 """
 
 
