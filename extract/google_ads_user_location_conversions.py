@@ -101,10 +101,12 @@ SELECT
   geographic_view.location_type,
   segments.conversion_action_name,
   metrics.conversions,
-  metrics.conversions_value
+  metrics.conversions_value,
+  metrics.all_conversions,
+  metrics.all_conversions_value
 FROM geographic_view
 WHERE segments.date BETWEEN '{start_date}' AND '{end_date}'
-AND metrics.conversions > 0
+AND metrics.all_conversions > 0
 """
 
 
@@ -172,6 +174,8 @@ def extract_targeted_geo_conversions(customer_id: str, start_date: str, end_date
                 "conversion_action_name": row.segments.conversion_action_name,
                 "conversions": row.metrics.conversions,
                 "conversions_value": row.metrics.conversions_value,
+                "all_conversions": row.metrics.all_conversions,
+                "all_conversions_value": row.metrics.all_conversions_value,
                 "_ingested_at": datetime.now(timezone.utc)
             })
 
@@ -182,6 +186,8 @@ def extract_targeted_geo_conversions(customer_id: str, start_date: str, end_date
         df = df.astype({
             "conversions": "float64",
             "conversions_value": "float64",
+            "all_conversions": "float64",
+            "all_conversions_value": "float64"
     })
 
     return df
@@ -210,6 +216,7 @@ def load_to_bigquery(df: pd.DataFrame, start_date: str, end_date: str, account_n
     print(f"Deleted existing rows for {account_name} ({account_id}) between {start_date} and {end_date}")
 
     job_config = bigquery.LoadJobConfig(write_disposition="WRITE_APPEND",
+                                        # schema_update_options = ["ALLOW_FIELD_ADDITION"], -- Uncomment whenever you need to modify the schema(Alter, Add new cols)
                                         schema = [
                                             bigquery.SchemaField("date", "DATE"),
                                             bigquery.SchemaField("account_id", "STRING"),
@@ -221,6 +228,8 @@ def load_to_bigquery(df: pd.DataFrame, start_date: str, end_date: str, account_n
                                             bigquery.SchemaField("conversion_action_name", "STRING"),
                                             bigquery.SchemaField("conversions", "FLOAT"),
                                             bigquery.SchemaField("conversions_value", "FLOAT"),
+                                            bigquery.SchemaField("all_conversions", "FLOAT"),
+                                            bigquery.SchemaField("all_conversions_value", "FLOAT"),
                                             bigquery.SchemaField("_ingested_at", "TIMESTAMP"),
                                         ],
                                         time_partitioning = bigquery.TimePartitioning(
