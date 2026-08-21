@@ -8,7 +8,7 @@ This repository contains the codebase for the **Google Cloud Platform (GCP) Mark
 
 ## 📦 Overview
 
-The GCP MarTech Analytics Warehouse integrates diverse marketing data sources (including **Google Ads**, **Google Analytics 4**, **Meta Ads**, **LinkedIn Ads**) into a **centralized BigQuery warehouse**.
+The GCP MarTech Analytics Warehouse integrates diverse marketing data sources (including **Google Ads**, **Google Analytics 4**, **Meta Ads**, **LinkedIn Ads**, **TikTok Ads**) into a **centralized BigQuery warehouse**.
 
 ### Core Pipeline Mechanics: The Medallion Architecture
 
@@ -24,7 +24,7 @@ Raw data is extracted using custom Python scripts via official **APIs** for each
 - **Idempotency:** I enforce strict idempotency using DELETE (based on Date/Account) before INSERT. This allows any DAG to be re-run safely without creating duplicate records.
 
 **2. Loading Strategy:**
-The Google Ads pipeline comprises **18 distinct extraction modules** producing 18 raw tables, Meta Ads pipeline comprises **9 distinct extraction modules** producing 9 raw tables and Other (CRM related) extraction comprises **2 distinct extraction modules**. The load process implements advanced data engineering logic:
+The Google Ads pipeline comprises **21 distinct extraction modules** producing 21 raw tables, Meta Ads pipeline comprises **12 distinct extraction modules** producing 12 raw tables and Other (CRM related) extraction comprises **2 distinct extraction modules**. The load process implements advanced data engineering logic:
 
 - **Historical Backfill:** Captures the past 3 years of data to enable Year-over-Year (YoY) and Year-to-Date (YTD) performance comparison.
 
@@ -61,13 +61,13 @@ The Google Ads pipeline comprises **18 distinct extraction modules** producing 1
 - **Smart Parsing & Normalization:** Cleans inconsistent dimensional data using CASE logic to handle legacy naming conventions, ensuring historical data aligns with current reporting structures.
 
 
-- **Global Event Mapping:** Automatically joins ad data with the `Global Events Calendar` to map generic campaigns to specific event editions (e.g., mapping "LEAP Riyadh" to "LEAP Riyadh 2025").
+- **Global Product Mapping:** Automatically joins ad data with the `Global Products Calendar` to map generic campaigns to specific product instances (e.g., mapping "LEAP Riyadh" to "LEAP Riyadh 2025", mapping "AVIATION WEEK" to "AVIATION WEEK 2025", mapping "WHX Dubai" to "WHX Dubai 2027").
 
 
-- **Dynamic Pricing tiers:** Calculates "Cut-Off Rates" (e.g., *SEB*, *EB*, *Advance*, *FP*, *Standard*, *Onsite*) based on the transaction date relative to the event calendar.
+- **Dynamic Pricing tiers:** Calculates "Cut-Off Rates" (e.g., *SEB*, *EB*, *Advance*, *FP*, *Standard*, *Onsite*) based on the transaction date relative to the product calendar.
 
 
-- **Countdown Logic:** Computes `Weeks Out` metrics (e.g., "Week 10", "Week 0") to enable time-relative performance curves for comparing events performance year-over-year.
+- **Countdown Logic:** Computes `Weeks Out` metrics (e.g., "Week 10", "Week 0") to enable time-relative performance curves for comparing products performance year-over-year.
 
 
 - **Local Currency Preservation:** Maintains original currency and cost metrics as reported by the source API (GBP, EUR, USD, etc.) to ensure 100% financial alignment with the platform UI.
@@ -91,7 +91,7 @@ The Google Ads pipeline comprises **18 distinct extraction modules** producing 1
 
 - **Consolidation:** Stacks Google and Meta data into a single ads_performance master table.
 
-- **Optimization:** Tables are Partitioned (by Date) and Clustered (by Platform/Event/Important Columns) to ensure high-speed filtering.
+- **Optimization:** Tables are Partitioned (by Date) and Clustered (by Platform/Product/Important Columns) to ensure high-speed filtering.
 
 ---
 
@@ -203,10 +203,21 @@ This specific sheet defines the exact schema for the **Bronze (Raw)** layer in B
 
 This is an active, ongoing engineering initiative.
 
-- **✅ Phase 1 (Complete):** Google Ads Extraction & Loading (18 Tables).
-- **🔄 Phase 2 (Complete):** Meta Ads (Facebook/Instagram) API Integration (9 Tables).
+- **✅ Phase 1 (Complete):** Google Ads Extraction & Loading (21 Tables).
+
+
+- **🔄 Phase 2 (Complete):** Meta Ads (Facebook/Instagram) API Integration (12 Tables).
+
+
 - **🔜 Phase 3 (Complete):** Transformation Layer using **dbt** (Data Build Tool) to create Gold/Mart datasets.
-- **📊 Phase 4 (Analytics):** BI connection via **Power BI** to visualize ad performance metrics such as ROAS, ROI, campaign performance, audience demographics, search term analysis, platform performance, geographic performance, and more, enabling budget pacing and optimization to improve marketing strategy and support Marketing Team and Director of Marketing in data-driven decision-making.
+
+
+- **🧱 Phase 4 (Semantic Model):** Construction of a Unified Semantic Model ingested into **Microsoft Fabric OneLake**, establishing an enterprise-grade, single source of truth across all paid marketing channels.
+
+
+- **📊 Phase 5 (Analytics Platform):** BI deployment via **Power BI** to visualize ad performance metrics such as ROAS, ROI, campaign performance, audience demographics, search term analysis, platform performance, geographic performance, and more, enabling budget pacing and optimization to improve marketing strategy and support Marketing Team and Director of Marketing in data-driven decision-making.
+
+> **🔄 Note on Ongoing Development:** I am actively extending this architecture to ingest data from additional marketing and web analytics sources, with connectors currently being built for **LinkedIn Ads, TikTok Ads, and Google Analytics 4 (GA4)**.
 
 ---
 
@@ -323,6 +334,12 @@ High-level view of **Impressions, Clicks, CTR%, and CPC**.
   - *Drill-down:* Analyze efficiency across specific Channels (`channel_type`) and Campaign Strategies.
 
 
+- **📍 Geo ROAS:**
+Deep-dive into geographic profitability and market-specific return on ad spend.
+  - *Analysis:* Identify **Top Markets by Sales and Revenue**, and track **Revenue & ROAS** trends across product instances and specific weeks.
+  - *Dimensions:* Filter data dynamically by **Country, Platform, Product Instance, and Standardized Conversion Type** (e.g., Purchase, Lead, Add to Cart).
+
+
 - **🌍 Geographic Insights:**
 Geo-spatial analysis of market efficiency.
   - *Metrics:* Impressions vs. Engagement by location.
@@ -344,7 +361,7 @@ Segmentation analysis to identify high-value personas.
 
 🧠 Author & Maintainer
 
-Prasanna - *Data Engineer & Analytics Specialist*
+Prasanna - *Senior Data Engineer & Analytics Specialist*
 
 📧 prasanna.uthamaraj@informa.com
 
