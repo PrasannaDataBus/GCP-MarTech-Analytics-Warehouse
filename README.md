@@ -204,9 +204,17 @@ This specific sheet defines the exact schema for the **Bronze (Raw)** layer in B
 This is an active, ongoing engineering initiative.
 
 - **✅ Phase 1 (Complete):** Google Ads Extraction & Loading (21 Tables).
+
+
 - **🔄 Phase 2 (Complete):** Meta Ads (Facebook/Instagram) API Integration (12 Tables).
+
+
 - **🔜 Phase 3 (Complete):** Transformation Layer using **dbt** (Data Build Tool) to create Gold/Mart datasets.
+
+
 - **🧱 Phase 4 (Semantic Model):** Construction of a Unified Semantic Model ingested into **Microsoft Fabric OneLake**, establishing an enterprise-grade, single source of truth across all paid marketing channels.
+
+
 - **📊 Phase 5 (Analytics Platform):** BI deployment via **Power BI** to visualize ad performance metrics such as ROAS, ROI, campaign performance, audience demographics, search term analysis, platform performance, geographic performance, and more, enabling budget pacing and optimization to improve marketing strategy and support Marketing Team and Director of Marketing in data-driven decision-making.
 
 > **🔄 Note on Ongoing Development:** I am actively extending this architecture to ingest data from additional marketing and web analytics sources, with connectors currently being built for **LinkedIn Ads, TikTok Ads, and Google Analytics 4 (GA4)**.
