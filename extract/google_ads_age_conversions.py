@@ -1,0 +1,419 @@
+# Process: Extract Raw Data and Injest into a raw schema inside a raw table
+# Data Points: Several Google Ads Account via API
+# Orchestration: Airflow-Docker-Dev & Airflow-Docker-Prod
+# Partitioning: Assigned in this script (By date)
+# Clustering: Assigned in this script (By important / relevant columns)
+# Incremental Loading: Time Travel window (14 Days)
+# MarTech Dictionary: Refer SharePoint file - MarTech Data Dictionary
+
+from google.ads.googleads.client import GoogleAdsClient
+from google.cloud import bigquery
+from datetime import datetime, timezone, date, timedelta
+import pandas as pd
+from dotenv import load_dotenv
+import re
+import os
+from pathlib import Path
+
+# --- Detect environment ---
+# You can set this with PowerShell: $env:ENVIRONMENT = "DEV" (temporary) or setx ENVIRONMENT "DEV" (permanent)
+# Verify using: echo $env:ENVIRONMENT
+
+
+def load_environment():
+    """
+    Load params.env dynamically:
+      - If inside Airflow: /opt/airflow/secrets/params.env
+      - Else (local Windows): infer env (Dev/Prod/…) from script path
+        '...\\GCP MarTech Analytics Warehouse - <Env>\\...'
+        and load '<base>\\GCP MarTech Analytics Warehouse - <Env>\\params.env'
+    Returns the detected environment name in UPPERCASE (e.g., 'DEV', 'PROD').
+    """
+    # Airflow container
+    airflow_env = Path("/opt/airflow/secrets/params.env")
+    if airflow_env.exists():
+        load_dotenv(airflow_env.as_posix(), override=True)
+        env = (os.getenv("ENVIRONMENT_NAME") or os.getenv("ENVIRONMENT") or "AIRFLOW").strip().upper()
+        print(f"Airflow detected. Loaded: {airflow_env}")
+        print(f"Effective ENV: {env}")
+        return env
+
+    # Local path-based detection (Windows)
+    # Use __file__ if available, else fall back to CWD (helps in REPL/tests)
+    script_path = Path(__file__).resolve() if "__file__" in globals() else Path.cwd().resolve()
+    script_str = str(script_path)
+
+    # Match the folder pattern: GCP MarTech Analytics Warehouse - <Env>
+    m = re.search(r"GCP MarTech Analytics Warehouse - ([A-Za-z]+)", script_str, flags=re.IGNORECASE)
+    if not m:
+        raise ValueError(
+            "Unable to detect environment from path. Expected path segment like "
+            "'GCP MarTech Analytics Warehouse - Dev' or '- Prod'. "
+            f"Got: {script_str}"
+        )
+
+    env = m.group(1).strip().upper()  # e.g., DEV, PROD, UAT, etc.
+    base_path = Path(r"C:\Users\prasa\Root")
+    folder_name = f"GCP MarTech Analytics Warehouse - {env.title()}"
+    env_file = (base_path / folder_name / "params.env")
+
+    if not env_file.exists():
+        raise FileNotFoundError(f"Environment file not found: {env_file}")
+
+    load_dotenv(env_file.as_posix(), override=True)
+
+    # if ENVIRONMENT_NAME exists in params.env, ensure it matches
+    file_env = (os.getenv("ENVIRONMENT_NAME") or env).strip().upper()
+    if file_env != env:
+        print(f"Mismatch: path env={env}, file ENVIRONMENT_NAME={file_env}")
+
+    print(f"Local detected. Loaded: {env_file}")
+    print(f"Effective ENV: {file_env}")
+    return env
+
+
+# usage
+current_env = load_environment()
+if __name__ == "__main__":
+    print(f"Running in {current_env} environment")
+
+# --- LOAD CONFIG STRINGS (SAFE AT TOP LEVEL) ---
+GOOGLE_ADS_CONFIG = os.getenv("GOOGLE_ADS_CONFIG")
+CREDENTIALS_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+
+# Ensure env var is set for BigQuery (Safe)
+if CREDENTIALS_PATH:
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = CREDENTIALS_PATH
+
+PROJECT_ID = os.getenv("GCP_PROJECT_ID")
+RAW_DATASET_NAME = os.getenv("RAW_DATASET_NAME")
+AGE_CONVERSIONS_TABLE = os.getenv("AGE_CONVERSIONS_TABLE")
+
+# --- GAQL Query for AGE RANGE CONVERSIONS ---
+QUERY_TEMPLATE = """
+SELECT
+  segments.date,
+  customer.id,
+  customer.descriptive_name,
+  customer.currency_code,
+  campaign.id,
+  campaign.name,
+  campaign.status,
+  ad_group.id,
+  ad_group.name,
+  ad_group_criterion.age_range.type,
+  segments.conversion_action_name,
+  metrics.conversions,
+  metrics.conversions_value,
+  metrics.all_conversions,
+  metrics.view_through_conversions
+FROM age_range_view
+WHERE segments.date BETWEEN '{start_date}' AND '{end_date}'
+AND metrics.all_conversions > 0
+"""
+
+
+# ---------------------------------------------------------
+# HELPER: LAZY LOAD CLIENTS
+# ---------------------------------------------------------
+def get_clients():
+    """
+    Initializes clients ONLY when called, prevents Import crashes in Airflow.
+    """
+    if not GOOGLE_ADS_CONFIG:
+        raise ValueError("GOOGLE_ADS_CONFIG environment variable is missing")
+
+    # print(f"Connecting to Google Ads using config: {GOOGLE_ADS_CONFIG}")
+
+    # Network calls happen HERE now
+    ads_client = GoogleAdsClient.load_from_storage(GOOGLE_ADS_CONFIG)
+    bq_client = bigquery.Client()
+
+    return ads_client, bq_client
+
+
+# --- FETCH ALL CLIENT ACCOUNTS (for MCC) ---
+def get_child_accounts(manager_customer_id: str, ads_client):
+    """Fetch all client accounts under a manager (MCC)."""
+    service = ads_client.get_service("GoogleAdsService")
+    query = """
+            SELECT
+              customer_client.id,
+              customer_client.descriptive_name,
+              customer_client.status
+            FROM customer_client
+            WHERE customer_client.manager = FALSE
+        """
+    response = service.search(
+        request = {"customer_id": manager_customer_id, "query": query}
+    )
+
+    accounts = []
+    for row in response:
+        accounts.append({
+            "id": row.customer_client.id,
+            "name": row.customer_client.descriptive_name or "Unnamed Account"
+        })
+    return accounts
+
+
+def extract_age_conversions_data(customer_id: str, start_date: str, end_date: str, ads_client):
+    """Extracts AGE RANGE conversions data from Google Ads for a specific account and date range."""
+    service = ads_client.get_service("GoogleAdsService")
+    query = QUERY_TEMPLATE.format(start_date=start_date, end_date=end_date)
+    response = service.search_stream(customer_id=customer_id, query=query)
+
+    rows = []
+    for batch in response:
+        for row in batch.results:
+            rows.append({
+                "date": row.segments.date,
+                "account_id": str(row.customer.id),
+                "account_name": row.customer.descriptive_name,
+                "campaign_id": str(row.campaign.id),
+                "campaign_name": row.campaign.name,
+                "campaign_status": row.campaign.status.name,
+                "ad_group_id": str(row.ad_group.id),
+                "ad_group_name": row.ad_group.name,
+                "age_range": getattr(row.ad_group_criterion.age_range.type, "name", None),
+                "conversion_action_name": row.segments.conversion_action_name,
+                "conversions": row.metrics.conversions,
+                "conversions_value": row.metrics.conversions_value,
+                "all_conversions": row.metrics.all_conversions,
+                "view_through_conversions": row.metrics.view_through_conversions,
+                "currency": row.customer.currency_code,
+                "_ingested_at": datetime.now(timezone.utc)
+            })
+
+    df = pd.DataFrame(rows)
+    if not df.empty:
+        df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
+
+        df = df.astype({
+            "conversions": "float64",
+            "conversions_value": "float64",
+            "all_conversions": "float64",
+            "view_through_conversions": "float64"
+    })
+
+    return df
+
+
+# # --- FIND LAST LOADED DATE ---
+def get_last_loaded_date(bq_client):
+    table_id = f"{PROJECT_ID}.{RAW_DATASET_NAME}.{AGE_CONVERSIONS_TABLE}"
+    query = f"SELECT MAX(date) AS last_date FROM `{table_id}`"
+    result = list(bq_client.query(query))
+    last_date = result[0].last_date if result and result[0].last_date else None
+    return last_date
+
+
+# --- LOAD TO BIGQUERY (INCREMENTAL) ---
+def load_to_bigquery(df: pd.DataFrame, start_date: str, end_date: str, account_name: str, account_id: str, bq_client):
+    table_id = f"{PROJECT_ID}.{RAW_DATASET_NAME}.{AGE_CONVERSIONS_TABLE}"
+
+    # Delete overlapping date range to ensure no duplicates
+    delete_query = f"""
+        DELETE FROM `{table_id}`
+        WHERE DATE(date) BETWEEN '{start_date}' AND '{end_date}'
+        AND account_id = '{account_id}'
+    """
+    bq_client.query(delete_query).result()
+    print(f"Deleted existing rows for {account_name} ({account_id}) between {start_date} and {end_date}")
+
+    job_config = bigquery.LoadJobConfig(write_disposition="WRITE_APPEND",
+                                        schema = [
+                                            bigquery.SchemaField("date", "DATE"),
+                                            bigquery.SchemaField("account_id", "STRING"),
+                                            bigquery.SchemaField("account_name", "STRING"),
+                                            bigquery.SchemaField("campaign_id", "STRING"),
+                                            bigquery.SchemaField("campaign_name", "STRING"),
+                                            bigquery.SchemaField("campaign_status", "STRING"),
+                                            bigquery.SchemaField("ad_group_id", "STRING"),
+                                            bigquery.SchemaField("ad_group_name", "STRING"),
+                                            bigquery.SchemaField("age_range", "STRING"),
+                                            bigquery.SchemaField("conversion_action_name", "STRING"),
+                                            bigquery.SchemaField("conversions", "FLOAT"),
+                                            bigquery.SchemaField("conversions_value", "FLOAT"),
+                                            bigquery.SchemaField("all_conversions", "FLOAT"),
+                                            bigquery.SchemaField("view_through_conversions", "FLOAT"),
+                                            bigquery.SchemaField("currency", "STRING"),
+                                            bigquery.SchemaField("_ingested_at", "TIMESTAMP"),
+                                        ],
+                                        time_partitioning = bigquery.TimePartitioning(
+                                            type_ = bigquery.TimePartitioningType.DAY,
+                                            field = "date",  # partition by date
+                                        ),
+                                        clustering_fields = [
+                                            "account_id",
+                                            "campaign_id",
+                                            "age_range",
+                                            "conversion_action_name"
+                                        ],
+    )
+
+    # --- Load the DataFrame into BigQuery ---
+    job = bq_client.load_table_from_dataframe(df, table_id, job_config=job_config)
+    job.result()
+    print(f"Loaded {len(df)} rows for {account_name} ({account_id}) into {RAW_DATASET_NAME}.{AGE_CONVERSIONS_TABLE}")
+
+
+# --- MAIN ---
+def main():
+    # 1. CALL THE NEW FUNCTION TO CONNECT
+    ads_client, bq_client = get_clients()
+
+    manager_id = ads_client.login_customer_id or ads_client.client_customer_id
+
+    # 2. PASS THE CLIENTS AS ARGUMENTS
+    child_accounts = get_child_accounts(manager_id, ads_client)
+    print(f"Found {len(child_accounts)} client accounts under manager {manager_id}")
+
+    # Define IDs to Ignore
+    EXCLUDED_IDS = ['8024672713']
+
+    last_loaded_date = get_last_loaded_date(bq_client)
+    lookback_days = 30  # configurable window for late updates
+    if last_loaded_date:
+        start_date = (last_loaded_date - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
+    else:
+        start_date = "2022-01-01"  # fallback for first run
+
+    end_date = date.today().strftime("%Y-%m-%d")
+
+    print(f"Incremental load from {start_date} → {end_date}")
+
+    # --- Initialize the list ---
+    failed_accounts = []
+
+    for account in child_accounts:
+        customer_id = str(account["id"])
+        account_name = account["name"]
+
+        # --- The Skip Logic ---
+        if customer_id in EXCLUDED_IDS:
+            print(f"Skipping known Test Account: {account_name} ({customer_id})")
+            continue  # Jumps to the next account immediately. No API call, no error.
+
+        print(f"\nExtracting for account: {account_name} ({customer_id})")
+
+        try:
+            # Step 1: Extract
+            df = extract_age_conversions_data(customer_id, start_date, end_date, ads_client)
+            if df.empty:
+                print(f"No new or updated data for {account_name}")
+                continue
+            print(f"Extracted {len(df)} rows for {account_name}")
+            # Step 2: Load (Happens per account strategy)
+            load_to_bigquery(df, start_date, end_date, account_name, customer_id, bq_client)
+        except Exception as e:
+            # Capture error, Log it, Track it, but DO NOT STOP the loop
+            error_msg = f"Failed for {account_name} ({customer_id}): {e}"
+            print(error_msg)
+            failed_accounts.append(error_msg)
+
+    # --- FINAL FAILURE CHECK ---
+    # If there were ANY failures during the loop, raise an exception now.
+    if failed_accounts:
+        print("\nCRITICAL: The following accounts failed extraction/loading:")
+        for err in failed_accounts:
+            print(f" - {err}")
+
+        # This ensures Airflow marks the task as FAILED so you get the email/alert
+        raise Exception(f"Script completed with errors in {len(failed_accounts)} accounts.")
+
+
+if __name__ == "__main__":
+    main()
+
+
+
+# Note: Do not uncomment the below without understanding that the below logic will
+# Append rows, it is important to provide the years = [] value. For Example: years = [2025]
+# When you provide the years values then the logic will filter out the raw data between {year}-01-01
+# and {year}-12-31. As i have already extracted and loaded the historical backfill data
+# so do not uncomment the below logic as you will overwrite the previously existing same records
+# which will result in duplicate rows and cost will be incurred.
+
+# --- LOAD TO BIGQUERY (HISTORICAL BACKFILL 2022 - 2025)
+
+# def load_to_bigquery(df, bq_client):
+#     # Convert date column safely to datetime.date
+#     if "date" in df.columns:
+#         df["date"] = pd.to_datetime(df["date"], errors = "coerce").dt.date
+#
+#     table_id = f"{PROJECT_ID}.{RAW_DATASET_NAME}.{AGE_CONVERSIONS_TABLE}"
+#     job_config = bigquery.LoadJobConfig(write_disposition="WRITE_APPEND",
+#                                         schema = [
+#                                             bigquery.SchemaField("date", "DATE"),
+#                                             bigquery.SchemaField("account_id", "STRING"),
+#                                             bigquery.SchemaField("account_name", "STRING"),
+#                                             bigquery.SchemaField("campaign_id", "STRING"),
+#                                             bigquery.SchemaField("campaign_name", "STRING"),
+#                                             bigquery.SchemaField("campaign_status", "STRING"),
+#                                             bigquery.SchemaField("ad_group_id", "STRING"),
+#                                             bigquery.SchemaField("ad_group_name", "STRING"),
+#                                             bigquery.SchemaField("age_range", "STRING"),
+#                                             bigquery.SchemaField("conversion_action_name", "STRING"),
+#                                             bigquery.SchemaField("conversions", "FLOAT"),
+#                                             bigquery.SchemaField("conversions_value", "FLOAT"),
+#                                             bigquery.SchemaField("all_conversions", "FLOAT"),
+#                                             bigquery.SchemaField("view_through_conversions", "FLOAT"),
+#                                             bigquery.SchemaField("currency", "STRING"),
+#                                             bigquery.SchemaField("_ingested_at", "TIMESTAMP"),
+#                                         ],
+#                                         time_partitioning = bigquery.TimePartitioning(
+#                                             type_ = bigquery.TimePartitioningType.DAY,
+#                                             field = "date",  # partition by date
+#                                         ),
+#                                         clustering_fields = [
+#                                             "account_id",
+#                                             "campaign_id",
+#                                             "age_range",
+#                                             "conversion_action_name"
+#                                         ],
+#     )
+#
+#     # --- Load the DataFrame into BigQuery ---
+#     job = bq_client.load_table_from_dataframe(df, table_id, job_config=job_config)
+#     job.result()
+#     print(f"Loaded {len(df)} rows into {table_id}")
+#
+#
+# # --- MAIN EXECUTION ---
+# def main():
+#     #1. Connect Clients
+#     ads_client, bq_client = get_clients()
+#
+#     manager_id = ads_client.login_customer_id or ads_client.client_customer_id
+#     child_accounts = get_child_accounts(manager_id, ads_client)
+#
+#     print(f"Found {len(child_accounts)} client accounts under manager {manager_id}")
+#
+#     for account in child_accounts:
+#         customer_id = str(account["id"])
+#         account_name = account["name"]
+#         print(f"\nExtracting AGE RANGE CONVERSIONS for account: {account_name} ({customer_id})")
+#
+#         years = [2026]  # Start with one year test, expand later
+#         for yr in years:
+#             start_date = f"{yr}-01-01"
+#             end_date = f"{yr}-12-31" if yr < date.today().year else str(date.today())
+#
+#             print(f"Extracting AGE RANGE CONVERSIONS {start_date} → {end_date}")
+#             try:
+#                 df = extract_age_conversions_data(customer_id, start_date, end_date, ads_client)
+#
+#                 if df.empty:
+#                     print(f"No AGE RANGE CONVERSIONS data for {yr} in {account_name}")
+#                     continue
+#
+#                 print(f"Extracted AGE RANGE CONVERSIONS {len(df)} rows for {yr} ({account_name})")
+#                 load_to_bigquery(df, bq_client)
+#
+#             except Exception as e:
+#                 print(f"Failed AGE RANGE CONVERSIONS for {account_name} ({customer_id}): {e}")
+#
+#
+# if __name__ == "__main__":
+#     main()
