@@ -9,7 +9,7 @@ sources:
 
     tables:
       # =========================================================
-      # GOOGLE ADS (21 Tables)
+      # GOOGLE ADS (25 Tables)
       # =========================================================
 
       # --- Financials & Performance ---
@@ -102,8 +102,16 @@ sources:
         description: "GEO Conversions by Geographic Location."
         loaded_at_field: date
 
+      - name: google_ads_age_conversions_raw
+          description: "Conversions by AGE Range."
+          loaded_at_field: date
+
+      - name: google_ads_gender_conversions_raw
+          description: "Conversions by Gender."
+          loaded_at_field: date
+
       # =========================================================
-      # META ADS (10 Tables)
+      # META ADS (12 Tables)
       # =========================================================
 
       # --- Financials & Performance ---
@@ -149,6 +157,10 @@ sources:
       - name: meta_ads_country_raw
         description: "Geographic Conversion performance (Country)."
         loaded_at_field: date_start
+
+      - name: meta_ads_age_gender_conversions_raw
+          description: "Conversions by Age range and Gender."
+          loaded_at_field: date_start
 
       # =========================================================
       # CRM / Sales conversions
