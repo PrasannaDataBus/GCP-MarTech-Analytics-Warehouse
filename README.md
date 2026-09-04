@@ -24,7 +24,7 @@ Raw data is extracted using custom Python scripts via official **APIs** for each
 - **Idempotency:** I enforce strict idempotency using DELETE (based on Date/Account) before INSERT. This allows any DAG to be re-run safely without creating duplicate records.
 
 **2. Loading Strategy:**
-The Google Ads pipeline comprises **21 distinct extraction modules** producing 21 raw tables, Meta Ads pipeline comprises **12 distinct extraction modules** producing 12 raw tables and Other (CRM related) extraction comprises **2 distinct extraction modules**. The load process implements advanced data engineering logic:
+The Google Ads pipeline comprises **23 distinct extraction modules** producing 23 raw tables, Meta Ads pipeline comprises **13 distinct extraction modules** producing 13 raw tables and Other (CRM related) extraction comprises **2 distinct extraction modules**. The load process implements advanced data engineering logic:
 
 - **Historical Backfill:** Captures the past 3 years of data to enable Year-over-Year (YoY) and Year-to-Date (YTD) performance comparison.
 
@@ -112,9 +112,9 @@ I deliberately group the Transformation phase (Silver -> Gold) into a single ato
 
 **Deployment Model**
 
-- **Airflow-Dev:** Contains 34 DAGs using **PostgreSQL**. No scheduling enabled. Used strictly for development testing, unit validation, and "Slim CI" runs.
+- **Airflow-Dev:** Contains 45 DAGs using **PostgreSQL**. No scheduling enabled. Used strictly for development testing, unit validation, and "Slim CI" runs.
 
-- **Airflow-Prod:** Contains 34 DAGs using **PostgreSQL**. Daily scheduling is active. Used for deploying and orchestrating core ETL processes on full data history.
+- **Airflow-Prod:** Contains 45 DAGs using **PostgreSQL**. Daily scheduling is active. Used for deploying and orchestrating core ETL processes on full data history.
 
 ---
 
