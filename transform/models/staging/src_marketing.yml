@@ -103,12 +103,12 @@ sources:
         loaded_at_field: date
 
       - name: google_ads_age_conversions_raw
-          description: "Conversions by AGE Range."
-          loaded_at_field: date
+        description: "Conversions by AGE Range."
+        loaded_at_field: date
 
       - name: google_ads_gender_conversions_raw
-          description: "Conversions by Gender."
-          loaded_at_field: date
+        description: "Conversions by Gender."
+        loaded_at_field: date
 
       # =========================================================
       # META ADS (12 Tables)
@@ -159,8 +159,8 @@ sources:
         loaded_at_field: date_start
 
       - name: meta_ads_age_gender_conversions_raw
-          description: "Conversions by Age range and Gender."
-          loaded_at_field: date_start
+        description: "Conversions by Age range and Gender."
+        loaded_at_field: date_start
 
       # =========================================================
       # CRM / Sales conversions
