@@ -6,8 +6,8 @@
 WITH source AS (
     SELECT * FROM {{ source('marketing_raw', 'google_ads_conversion_action_raw') }}
 
-    -- COST SAVER: This block runs ONLY in Dev.
-    -- When merged to Prod, dbt ignores it automatically.
+    -- COST SAVER: This block runs ONLY in Dev
+    -- When merged to Prod, dbt ignores it automatically
     {% if target.name == 'dev' %}
     WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY)
     {% endif %}
